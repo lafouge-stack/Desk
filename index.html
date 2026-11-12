@@ -3,20 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow"><!-- version personnelle : pas de référencement (données de marché tierces republiées) -->
 <title>Captain Trading · Desk</title>
 <meta name="description" content="Le desk crypto gratuit : prix et liquidations en direct, news X, Trump et onchain, et un agent IA qui lit le marché toutes les 30 min.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Captain Trading">
 <meta property="og:title" content="Captain Trading · Desk">
 <meta property="og:description" content="Le desk crypto gratuit : prix et liquidations en direct, news X, Trump et onchain, et un agent IA qui lit le marché toutes les 30 min.">
-<meta property="og:url" content="https://captaincryptotrading21.github.io/desk/">
-<meta property="og:image" content="https://captaincryptotrading21.github.io/desk/apercu.png">
+<meta property="og:url" content="https://lafouge-stack.github.io/Desk/">
+<meta property="og:image" content="https://lafouge-stack.github.io/Desk/apercu.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Captain Trading · Desk">
 <meta name="twitter:description" content="Le desk crypto gratuit : prix et liquidations en direct, news X, Trump et onchain, et un agent IA qui lit le marché toutes les 30 min.">
-<meta name="twitter:image" content="https://captaincryptotrading21.github.io/desk/apercu.png">
+<meta name="twitter:image" content="https://lafouge-stack.github.io/Desk/apercu.png">
 <!--@public--><script>window.CK_PUBLIC=1;</script><!--/@public-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,7 +47,7 @@ window.COCKPIT_CONFIG = {
   screenerPreset: "compression", // préréglage du screener au lancement
   screenerMax: 150,              // nombre de coins analysés (les plus liquides d'OKX)
   newsLang: "fr",                // "fr" = headlines traduites, "vo" = version originale
-  data: "https://captaincryptotrading21.github.io/desk"                       // adresse du site GitHub du Desk (robot : agenda, news crypto, FinancialJuice)
+  data: "https://lafouge-stack.github.io/Desk"                                // adresse du site GitHub du Desk (robot : agenda, news crypto, FinancialJuice)
 };
 </script>
 <script>
@@ -3257,6 +3258,8 @@ CK.layout={
   edit:setEditing,
   show:show,
   view:function(){return view;},
+  /* Studio : tous les espaces existants (affichés ou masqués), dans l'ordre de la navigation */
+  catalog:function(){return VIEWS0.filter(function(v){return v.id!=="home";}).map(function(v){return {id:v.id,name:v.name};});},
   /* Studio : quels blocs sont dans quel espace */
   spaces:function(){return VIEWS.filter(function(v){return v.id!=="home";}).map(function(v){
     var ids=DEFAULTS[v.id].map(function(x){return x.id;});all[v.id].forEach(function(x){if(ids.indexOf(x.id)<0)ids.push(x.id);});
@@ -4292,6 +4295,9 @@ CK.screener={
   preset:setPreset
 };
 CK.runScan=scan;
+/* Accès en lecture aux calculs, pour les tests automatiques (golden-chop.test.mjs) et le futur screener mensuel.
+   Ne rien changer à ces fonctions : le test vérifie qu'elles donnent exactement les mêmes résultats qu'avant. */
+CK.screener._t={sma:sma,chop:chop,rsi:rsi,atrp:atrp,metrics:metrics};
 })();
 
 /* ================================================================
@@ -4305,6 +4311,13 @@ var UI=CK.ui={};
 /* ---------------- Studio ---------------- */
 function fld(label,html,full){return '<label class="fld'+(full?" full":"")+'">'+label+html+'</label>';}
 function seg(id,cur,opts){return '<div class="st-seg" id="'+id+'" role="group">'+opts.map(function(o){return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(String(cur)===o[0]?"true":"false")+'">'+o[1]+'</button>';}).join("")+'</div>';}
+/* Liste des espaces du Studio : lue dans layout.js (VIEWS0), pour qu'un nouvel espace y apparaisse tout seul */
+var ESP_LABEL={veille:"Agent IA"};
+function espList(){
+  var cat=CK.layout&&CK.layout.catalog?CK.layout.catalog():[];
+  if(!cat.length)cat=[{id:"journee",name:"Journée"},{id:"macro",name:"Signaux"},{id:"screener",name:"Screener"},{id:"liq",name:"Liquidations"},{id:"news",name:"News"},{id:"veille",name:"Agent"},{id:"net",name:"Connexions"}];
+  return cat.map(function(v){return [v.id,ESP_LABEL[v.id]||v.name];});
+}
 /* Studio : l'essentiel visible, le reste replié. Tout s'applique tout de suite. */
 function renderStudio(){
   var C=CK.cfg(),sp=CK.layout&&CK.layout.spaces?CK.layout.spaces():[];
@@ -4312,7 +4325,7 @@ function renderStudio(){
     fld("Nom",'<input id="sName" maxlength="24" value="'+esc(C.name)+'">')+fld("Sous-titre",'<input id="sTag" maxlength="40" value="'+esc(C.tagline)+'">')+
     fld("Cryptos suivies dans la barre du haut",'<input id="sWatch" value="'+esc((C.watchlist||[]).join(", "))+'" placeholder="BTC, ETH, SOL">',true)+'</div></div>'+
     '<div class="st-sec"><h4>Espaces affichés</h4><p class="st-hint">Décoche un espace qui ne t\'intéresse pas : il disparaît de l\'accueil et de la navigation (la page se recharge).</p><div class="st-chips">'+
-    [["journee","Journée"],["macro","Signaux"],["screener","Screener"],["liq","Liquidations"],["news","News"],["veille","Agent IA"],["net","Connexions"]].map(function(x){var on=(C.espaces||{})[x[0]]!==false;return '<button type="button" class="st-chip" data-esp="'+x[0]+'" aria-pressed="'+on+'">'+(on?"✓ ":"")+x[1]+'</button>';}).join("")+'</div></div>'+
+    espList().map(function(x){var on=(C.espaces||{})[x[0]]!==false;return '<button type="button" class="st-chip" data-esp="'+x[0]+'" aria-pressed="'+on+'">'+(on?"✓ ":"")+x[1]+'</button>';}).join("")+'</div></div>'+
     '<div class="st-sec"><h4>Blocs de chaque espace</h4><p class="st-hint">Clique sur un bloc pour l\'afficher ou le masquer. Pour changer l\'ordre ou la largeur : ouvre l\'espace puis le bouton Disposition.</p>'+
     sp.map(function(s){return '<div class="st-space"><b>'+esc(s.name)+'</b><div class="st-chips">'+s.blocks.map(function(bk){return '<button type="button" class="st-chip" data-sp="'+s.id+'" data-bk="'+bk.id+'" aria-pressed="'+(bk.on&&C.modules[bk.id]!==false?"true":"false")+'">'+esc(bk.name)+'</button>';}).join("")+'</div></div>';}).join("")+
     '<button type="button" class="btn sm" id="sLayout">Réorganiser l\'espace ouvert</button></div>'+
@@ -4358,7 +4371,7 @@ function wireStudio(){
     if(sb){sb.parentNode.querySelectorAll("button").forEach(function(x){x.setAttribute("aria-pressed",x===sb?"true":"false");});var prev=CK.cfg();applyLive(readStudio(),prev);
       if(sb.parentNode.id==="sTheme")CK.setTheme(sb.getAttribute("data-v"),sb);return;}
     var es=e.target.closest("[data-esp]");if(es){var C2=CK.merge(CK.cfg(),{}),k=es.getAttribute("data-esp");C2.espaces=C2.espaces||{};C2.espaces[k]=C2.espaces[k]===false;
-      var reste=["journee","macro","screener","liq","news","veille","net"].filter(function(x){return C2.espaces[x]!==false;}).length;if(!reste){CK.toast("Garde au moins un espace.");return;}
+      var reste=espList().map(function(x){return x[0];}).filter(function(x){return C2.espaces[x]!==false;}).length;if(!reste){CK.toast("Garde au moins un espace.");return;}
       CK.setCfg(C2,true);CK.toast("Espace "+(C2.espaces[k]===false?"masqué":"affiché")+". Rechargement…");setTimeout(function(){location.reload();},700);return;}
     var ch=e.target.closest(".st-chip");if(!ch)return;
     var on=ch.getAttribute("aria-pressed")!=="true",id=ch.getAttribute("data-bk");ch.setAttribute("aria-pressed",on?"true":"false");
@@ -5342,8 +5355,8 @@ function act(a){
   if(!a)return;var k=a.slice(0,a.indexOf(":")),v=a.slice(a.indexOf(":")+1);
   if(k==="chart"&&CK.openChart)CK.openChart("OKX:"+v+"USDT.P",v);
   else if(k==="link")window.open(v,"_blank","noopener");
-  else if(k==="net"){enter(5);}
-  else if(k==="sig"){enter(1);setTimeout(function(){var el=document.querySelector('#sigList .sg[data-k="'+v+'"]');if(el)el.click();},700);}
+  else if(k==="net"){var ni=idxOf("net");if(ni>=0)enter(ni);}
+  else if(k==="sig"){var si=idxOf("macro");if(si<0)return;enter(si);setTimeout(function(){var el=document.querySelector('#sigList .sg[data-k="'+v+'"]');if(el)el.click();},700);}
 }
 
 /* ---------- Chiffres qui défilent jusqu'à leur valeur ---------- */

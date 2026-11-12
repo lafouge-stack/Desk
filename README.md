@@ -1,5 +1,9 @@
 # Captain Trading · Desk
 
+> **Version personnelle** de [Captain Trading · Desk](https://github.com/captaincryptotrading21/desk), en cours d'évolution vers un suivi multi-actifs (actions, ETF, indices, obligations, matières premières, PEA). Usage personnel, selon la [licence](LICENSE.md) d'origine. Ma version : https://lafouge-stack.github.io/Desk
+>
+> Les informations affichées ne constituent pas un conseil en investissement personnalisé. Les performances passées ne préjugent pas des performances futures.
+
 Un terminal de trading crypto et macro, gratuit, dans ton navigateur : sessions et annonces de la journée, signaux, carte des liquidations, screener, carnet d'ordres agrégé, news et tweets à la minute traduits en français (Trump sur Truth Social, comptes qui pistent les baleines…), et **un agent IA qui lit le marché toutes les 30 min** avec ses niveaux et son bilan.
 
 ## 👉 [Ouvrir le Desk](https://captaincryptotrading21.github.io/desk)

@@ -235,8 +235,8 @@ function act(a){
   if(!a)return;var k=a.slice(0,a.indexOf(":")),v=a.slice(a.indexOf(":")+1);
   if(k==="chart"&&CK.openChart)CK.openChart("OKX:"+v+"USDT.P",v);
   else if(k==="link")window.open(v,"_blank","noopener");
-  else if(k==="net"){enter(5);}
-  else if(k==="sig"){enter(1);setTimeout(function(){var el=document.querySelector('#sigList .sg[data-k="'+v+'"]');if(el)el.click();},700);}
+  else if(k==="net"){var ni=idxOf("net");if(ni>=0)enter(ni);}
+  else if(k==="sig"){var si=idxOf("macro");if(si<0)return;enter(si);setTimeout(function(){var el=document.querySelector('#sigList .sg[data-k="'+v+'"]');if(el)el.click();},700);}
 }
 
 /* ---------- Chiffres qui défilent jusqu'à leur valeur ---------- */

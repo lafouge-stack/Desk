@@ -1,0 +1,28 @@
+name: Tests du Desk
+
+# Vérifie chaque envoi de code : construction du Desk + tests automatiques.
+# Ce workflow est séparé du robot (desk.yml) : un test en échec ne bloque JAMAIS la publication
+# des news et de l'agenda toutes les 10 minutes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tests automatiques
+        run: node --test "*.test.mjs"
+      - name: index.html est à jour (reconstruit avec node build.mjs avant l'envoi)
+        run: |
+          node build.mjs
+          git diff --exit-code -- index.html || (echo "::error::index.html n'est pas à jour : lance node build.mjs puis envoie le fichier." && exit 1)

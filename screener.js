@@ -225,4 +225,7 @@ CK.screener={
   preset:setPreset
 };
 CK.runScan=scan;
+/* Accès en lecture aux calculs, pour les tests automatiques (golden-chop.test.mjs) et le futur screener mensuel.
+   Ne rien changer à ces fonctions : le test vérifie qu'elles donnent exactement les mêmes résultats qu'avant. */
+CK.screener._t={sma:sma,chop:chop,rsi:rsi,atrp:atrp,metrics:metrics};
 })();

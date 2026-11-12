@@ -249,6 +249,8 @@ CK.layout={
   edit:setEditing,
   show:show,
   view:function(){return view;},
+  /* Studio : tous les espaces existants (affichés ou masqués), dans l'ordre de la navigation */
+  catalog:function(){return VIEWS0.filter(function(v){return v.id!=="home";}).map(function(v){return {id:v.id,name:v.name};});},
   /* Studio : quels blocs sont dans quel espace */
   spaces:function(){return VIEWS.filter(function(v){return v.id!=="home";}).map(function(v){
     var ids=DEFAULTS[v.id].map(function(x){return x.id;});all[v.id].forEach(function(x){if(ids.indexOf(x.id)<0)ids.push(x.id);});

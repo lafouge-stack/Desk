@@ -14,6 +14,8 @@ Un petit robot GitHub (`robot.mjs`) publie toutes les 10 minutes ce que le navig
 - **On modifie les fichiers sources** (`page.html`, les `.js`, les `.css`, `config.js`), jamais `index.html` à la main : il est généré.
 - Tous les fichiers sont à la racine du dossier (pas de sous-dossier : l'envoi de fichiers par le site GitHub ne garde pas les dossiers). Garde cette organisation.
 - Après chaque modification : `node build.mjs`. Le script assemble `page.html`, les `.js` et les `.css` dans `index.html` et vérifie que le JavaScript est valide. S'il affiche une erreur, corrige-la avant de continuer.
+- Puis lance les tests : `node --test "*.test.mjs"`. Tous doivent passer (✔). Un test en échec veut dire qu'une modification a cassé quelque chose : corrige le code, **ne modifie pas le test pour le faire passer** (surtout `golden-chop.test.mjs`, qui protège l'indice de compression du screener crypto).
+- Node.js est nécessaire (version 22 ou plus). Sur ce poste, il est installé par winget dans `%LOCALAPPDATA%\Microsoft\WinGet\Packages\OpenJS.NodeJS.LTS_…\node-v24…`. Si `node` est introuvable dans un terminal ouvert avant l'installation, ouvre un nouveau terminal.
 - Pour voir le résultat : `node serve.mjs` puis ouvrir http://localhost:5173 (ou ouvrir `index.html` directement dans le navigateur).
 - Après une modification visible, ouvre la page et vérifie qu'il n'y a pas d'erreur dans la console du navigateur.
 
@@ -37,6 +39,9 @@ Un petit robot GitHub (`robot.mjs`) publie toutes les 10 minutes ce que le navig
 | `ui.js` | Studio, alertes de prix, calculateur de position, palette de commandes (Ctrl+K). |
 | `net.js` | Espace « Connexions » : état en direct de chaque source (liste `SRC`). |
 | `veille.js` | **L'espace « Agent »** : affichage de la lecture du marché écrite par l'agent (`lectureHTML`, `actifCol`, `jauge`, `etat`), mise à jour en direct (`majLive`), lectures précédentes (`histo`), onglets Bilan (`viewBilan`) et Conso IA (`viewConso`), cartes BTC/ETH/SOL/dollar avec graphiques et niveaux (`card`, `cardUSD`, `niveaux`), indicateur TradingView (`PINE_AUTO`). |
+| `vmkit.mjs` | Kit de test : charge les fichiers du navigateur dans Node (faux `window`, `document`, `localStorage`, minuteries qui ne tournent pas). Fournit aussi des bougies de test déterministes (`candles`). |
+| `*.test.mjs` | Tests automatiques (`node --test "*.test.mjs"`, aucune installation). `golden-chop.test.mjs` + `golden-chop.json` : valeurs de référence du screener crypto (CHOP, RSI, ATR %, metrics), à ne jamais régénérer sans raison. `build.test.mjs` : le build réussit et contient tous les fichiers. |
+| `.github/workflows/tests.yml` | Lance les tests à chaque envoi sur GitHub. Séparé du robot : un test en échec ne bloque jamais la publication des news. Vérifie aussi que `index.html` a bien été reconstruit avant l'envoi. |
 | `desk-news-worker.js` | **Le relais Cloudflare** (code de l'agent et des news Telegram). Il ne tourne pas dans le navigateur : il se déploie sur Cloudflare Workers (voir plus bas). Aucune clé dedans : elles sont des secrets Cloudflare. |
 | `niveaux-captain.pine` | L'indicateur TradingView « Niveaux Captain » (Pine v5), copié par le bouton « Indicateur TradingView » du Desk. |
 | `agent-manuel.md` | Ancien manuel de l'agent, **plus utilisé** (l'agent actuel a sa méthode dans le relais). Ne pas le modifier. |
@@ -74,6 +79,33 @@ Personne n'a de clé à mettre : les clés sont des secrets du relais, jamais da
 ## Studio et espaces
 
 Le bouton « Studio » permet de choisir les espaces affichés sur l'accueil (`espaces` dans `DEF` de `core.js`, liste `W0` de `worlds.js`, `VIEWS0` de `layout.js`). Un espace décoché disparaît de l'accueil, du menu et de la page.
+La liste des espaces du Studio est lue dans `VIEWS0` (`CK.layout.catalog()`) : un nouvel espace y apparaît tout seul. Seul le libellé « Agent IA » est surchargé (`ESP_LABEL` dans `ui.js`).
+
+## Évolution multi-actifs (en cours)
+
+Le Desk évolue vers une plateforme multi-actifs pour un investisseur français : actions, ETF, indices, obligations, matières premières, crypto, portefeuille, éligibilité PEA, allocation mensuelle, screener mensuel, backtest. Le plan a été validé le 12/11/2026. Il avance **phase par phase**, avec un arrêt pour validation à la fin de chacune :
+
+| Phase | Contenu | État |
+|---|---|---|
+| 0 | Outillage : Node, tests (`vmkit.mjs`, golden), workflow de tests, `serve.mjs`, corrections Studio et accueil, dépôt GitHub personnel | en cours |
+| 1 | Socle de données : `models.js`, `datakit.js`, `fx.js`, `calendars.js`, `pea.js`, `providers.js`, `referentiel.json`, `allocation.json`, `fiscal.json` | à faire |
+| 2 | Espace « Marchés » (touche 8) | à faire |
+| 3 | Historiques publiés par le robot (branche `donnees`) | à faire |
+| 4 | Espace « Portefeuille » (touche 9) | à faire |
+| 5 | Préférences d'investissement + allocation mensuelle | à faire |
+| 6 | Screener mensuel (mode à côté du screener crypto) | à faire |
+| 7 | Backtest | à faire |
+| 8 | Finitions | à faire |
+
+Décisions qui s'appliquent à tout le chantier :
+- **Toujours sans serveur.** Les « endpoints » sont des fichiers JSON publiés par le robot. Le portefeuille reste uniquement dans le navigateur (jamais dans le dépôt ni sur un serveur).
+- **Ne pas casser le crypto** : le code crypto existant est enveloppé, pas réécrit. Les nouveaux espaces se chargent seulement à leur ouverture. Les nouveaux appels au scanner TradingView restent sous un budget bas, avec un disjoncteur pour ne pas provoquer de refus (429) qui casseraient les Signaux et l'Agent.
+- **Point-in-time** : le moteur d'allocation et le backtest n'utilisent que des historiques datés, jamais les valeurs instantanées du scanner TradingView.
+- **Une classe ou un type d'actif non coché n'est jamais proposé** (garde-fou unique `CK.allow`).
+- **PEA** : un fonds n'est jamais déclaré éligible par déduction ; l'enveloppe PEA est toujours stricte ; chaque statut affiche sa source et sa date.
+- **Vocabulaire** : « Proposition du mois selon tes règles », jamais « conseil ». Le disclaimer exact est visible partout : « Les informations affichées ne constituent pas un conseil en investissement personnalisé. Les performances passées ne préjugent pas des performances futures. »
+- **Licence** : usage personnel ; garder la mention « Captain Trading » ; ne jamais proposer cette version dans une offre payante sans accord écrit de Captain Trading.
+- Nouveaux espaces ajoutés **après** Connexions (touches 8 et 9), pour ne pas renuméroter les touches existantes.
 
 ## Recettes courantes
 
