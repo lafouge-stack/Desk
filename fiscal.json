@@ -1,0 +1,46 @@
+{
+  "_doc": "Règles fiscales INDICATIVES (France), utilisées pour estimer un coût fiscal et pour l'option « après impôt » du backtest. Aucun calcul fiscal définitif. Chaque règle a une date d'effet, une source et un statut : V = vérifié sur la source citée, A = à confirmer. Mettre à jour après chaque loi de finances.",
+  "version": 1,
+  "verifie_le": "2026-11-12",
+  "avertissement": "Fiscalité indicative, simplifiée, sans valeur de conseil fiscal. Vérifie ta situation auprès de ton établissement ou d'un professionnel.",
+  "taux": {
+    "ir_pfu": { "valeur": 12.8, "depuis": "2018-01-01", "source": "https://www.service-public.gouv.fr/particuliers/vosdroits/F2329", "statut": "V" },
+    "prelevements_sociaux": { "valeur": 18.6, "depuis": "2026-01-01", "avant": 17.2, "source": "https://placement.meilleurtaux.com/bourse/actualites/2026-fevrier/taux-prelevements-sociaux-applique-pea-passe-desormais-18-6.html", "statut": "V", "note": "Hausse de la CSG de 1,4 point (LFSS 2026). L'assurance-vie, le PEL/CEL et les revenus fonciers sont exclus de la hausse. Le taux appliqué aux gains anciens des PEA ouverts avant 2018 peut différer (taux historiques) : approximation." },
+    "prelevements_sociaux_assurance_vie": { "valeur": 17.2, "depuis": "2018-01-01", "source": "https://www.legifiscal.fr/actualites-fiscales/4369-janvier-2026-hausse-csg-appliquera-certains-placements-financiers.html", "statut": "A" }
+  },
+  "enveloppes": {
+    "CTO": {
+      "label": "Compte-titres ordinaire",
+      "regle": "Plus-values et dividendes soumis au PFU (12,8 % + 18,6 % = 31,4 %), ou au barème sur option. Prix de revient = prix moyen pondéré. Moins-values imputables sur les plus-values de même nature pendant 10 ans.",
+      "taux_global": 31.4, "moins_values_report_ans": 10, "statut": "V"
+    },
+    "PEA": {
+      "label": "PEA",
+      "regle": "Aucun impôt tant que l'argent reste dans le plan. Retrait avant 5 ans : clôture du plan (sauf exceptions) et gain taxé 31,4 %. Après 5 ans : gain exonéré d'impôt sur le revenu, seuls les prélèvements sociaux (18,6 %) s'appliquent ; un retrait partiel ne clôt plus le plan.",
+      "anciennete_exoneration_ans": 5, "taux_avant_5_ans": 31.4, "taux_apres_5_ans": 18.6,
+      "plafond_versements_eur": 150000, "source": "https://www.service-public.gouv.fr/particuliers/vosdroits/F2385", "statut": "V"
+    },
+    "PEA_PME": {
+      "label": "PEA-PME",
+      "regle": "Même fiscalité que le PEA. Plafond commun PEA + PEA-PME : 225 000 € de versements (dont 150 000 € au plus sur le PEA). Aucun ETF éligible au PEA-PME depuis 2022.",
+      "anciennete_exoneration_ans": 5, "taux_avant_5_ans": 31.4, "taux_apres_5_ans": 18.6,
+      "plafond_commun_eur": 225000, "source": "https://www.service-public.gouv.fr/particuliers/vosdroits/F2385", "statut": "V"
+    },
+    "PEA_jeune": {
+      "label": "PEA « jeune »",
+      "regle": "Majeur rattaché au foyer fiscal de ses parents (jusqu'à 25 ans) : plafond de 20 000 €.",
+      "plafond_versements_eur": 20000, "source": "https://www.service-public.gouv.fr/particuliers/vosdroits/F2385", "statut": "V"
+    },
+    "assurance_vie": {
+      "label": "Assurance-vie",
+      "regle": "Gains taxés seulement au rachat. Avant 8 ans : PFU. Après 8 ans : abattement annuel (4 600 € / 9 200 € pour un couple) puis taux réduit d'impôt sur le revenu selon les versements ; prélèvements sociaux 17,2 % (exclue de la hausse 2026).",
+      "anciennete_avantage_ans": 8, "abattement_annuel_eur": 4600, "abattement_couple_eur": 9200, "statut": "A"
+    },
+    "crypto_wallet": {
+      "label": "Crypto-actifs",
+      "regle": "Seules les cessions contre de la monnaie ayant cours légal (ou un bien/service) sont imposables, selon une formule de portefeuille globale (art. 150 VH bis du CGI) ; un échange crypto contre crypto n'est pas imposable. PFU 31,4 % ; exonération si le total des cessions de l'année ne dépasse pas 305 €.",
+      "taux_global": 31.4, "seuil_exoneration_cessions_eur": 305, "statut": "A"
+    },
+    "bank_account": { "label": "Compte bancaire", "regle": "Intérêts éventuels soumis au PFU (hors livrets réglementés).", "statut": "A" }
+  }
+}

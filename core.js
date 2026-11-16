@@ -56,7 +56,10 @@ function logo(base){return '<img class="lo" alt="" loading="lazy" src="https://s
 /* ---- Journal réseau (espace Connexions) ---- */
 var NET={};CK.NET=NET;
 function netId(url){url=String(url);
-  var R=[["ws.okx.com","okxws"],["stream.bybit.com","bybit"],["fstream.binance.com","binws"],["okx.com/api","okx"],["fapi.binance.com","binfx"],["scanner.tradingview.com","tvscan"],
+  /* Règles précises d'abord (multi-actifs) : sinon ces appels seraient comptés dans tvscan ou robot, et une erreur des
+     Marchés passerait pour une panne du crypto. */
+  var R=[["label-product=desk-marches","tvscan2"],["data-api.binance.vision","binhist"],["frankfurter.dev","fx"],["data-api.ecb.europa.eu","ecb"],
+    ["/data/hist/","robotdata"],["/data/marches-meta.json","robotdata"],["/data/fx.json","robotdata"],["ws.okx.com","okxws"],["stream.bybit.com","bybit"],["fstream.binance.com","binws"],["okx.com/api","okx"],["fapi.binance.com","binfx"],["scanner.tradingview.com","tvscan"],
     ["alternative.me","fng"],["financialjuice.com","fj"],["treeofalpha.com","tree"],["workers.dev","tg"],["github.io","robot"],["generativelanguage.googleapis.com","gemini"],["api.mistral.ai","iapay"],["api.openai.com","iapay"],["api.anthropic.com","iapay"],["api.x.ai","iapay"],["api.perplexity.ai","iapay"],["api.deepseek.com","iapay"],["openrouter.ai","openrouter"],["allorigins","ff"],["translate.googleapis.com","tr"],["api.bybit.com","bybitrest"],["api.bitget.com","bitget"],["hyperliquid.xyz","hl"],["deribit.com","deribit"],["coinbase.com","coinbase"],["mymemory","tr"],["tradingview.com","tvw"]];
   for(var i=0;i<R.length;i++)if(url.indexOf(R[i][0])>=0)return R[i][1];return null;}
 function netRec(id){return NET[id]||(NET[id]={calls:0,ok:0,err:0,lastOk:0,lastErr:0,ms:0,msg:"",code:0,open:false,opens:0,closes:0,lastMsg:0,msgs:[],openTs:0});}

@@ -2220,7 +2220,10 @@ function logo(base){return '<img class="lo" alt="" loading="lazy" src="https://s
 /* ---- Journal réseau (espace Connexions) ---- */
 var NET={};CK.NET=NET;
 function netId(url){url=String(url);
-  var R=[["ws.okx.com","okxws"],["stream.bybit.com","bybit"],["fstream.binance.com","binws"],["okx.com/api","okx"],["fapi.binance.com","binfx"],["scanner.tradingview.com","tvscan"],
+  /* Règles précises d'abord (multi-actifs) : sinon ces appels seraient comptés dans tvscan ou robot, et une erreur des
+     Marchés passerait pour une panne du crypto. */
+  var R=[["label-product=desk-marches","tvscan2"],["data-api.binance.vision","binhist"],["frankfurter.dev","fx"],["data-api.ecb.europa.eu","ecb"],
+    ["/data/hist/","robotdata"],["/data/marches-meta.json","robotdata"],["/data/fx.json","robotdata"],["ws.okx.com","okxws"],["stream.bybit.com","bybit"],["fstream.binance.com","binws"],["okx.com/api","okx"],["fapi.binance.com","binfx"],["scanner.tradingview.com","tvscan"],
     ["alternative.me","fng"],["financialjuice.com","fj"],["treeofalpha.com","tree"],["workers.dev","tg"],["github.io","robot"],["generativelanguage.googleapis.com","gemini"],["api.mistral.ai","iapay"],["api.openai.com","iapay"],["api.anthropic.com","iapay"],["api.x.ai","iapay"],["api.perplexity.ai","iapay"],["api.deepseek.com","iapay"],["openrouter.ai","openrouter"],["allorigins","ff"],["translate.googleapis.com","tr"],["api.bybit.com","bybitrest"],["api.bitget.com","bitget"],["hyperliquid.xyz","hl"],["deribit.com","deribit"],["coinbase.com","coinbase"],["mymemory","tr"],["tradingview.com","tvw"]];
   for(var i=0;i<R.length;i++)if(url.indexOf(R[i][0])>=0)return R[i][1];return null;}
 function netRec(id){return NET[id]||(NET[id]={calls:0,ok:0,err:0,lastOk:0,lastErr:0,ms:0,msg:"",code:0,open:false,opens:0,closes:0,lastMsg:0,msgs:[],openTs:0});}
@@ -2951,6 +2954,1517 @@ CK.boot=function(){
   setInterval(function(){if(!document.hidden)renderNewsSoft();},60000);
 };
 window.Cockpit={boot:function(){CK.boot();}};
+})();
+
+/* ================================================================
+   COCKPIT — Modèles de données multi-actifs (phase 1)
+   Classes d'actifs (arbre), véhicules, énumérations, normaliseurs,
+   validateurs, garde-fou unique CK.allow, référentiel CK.ref.
+   Aucun accès au DOM ni minuterie au chargement : testable dans Node (vmkit.mjs).
+   Types documentés en JSDoc (vérifiables par VS Code avec // @ts-check).
+   ================================================================ */
+(function(){
+"use strict";
+var CK=window.CK=window.CK||{};
+
+/* ---------- Données éditables injectées par build.mjs (referentiel.json, allocation.json, fiscal.json) ----------
+   Dans index.html, chaque marqueur est remplacé par le contenu JSON du fichier. Hors build (tests), ce sont
+   des chaînes : les tests appellent CK.models.setData(). */
+CK.DATA=CK.DATA||{referentiel:{"_doc":["Référentiel des instruments suivis par le Desk (actions, ETF, ETC, indices, taux, devises, crypto). Ce fichier est inséré dans index.html par node build.mjs.","Ajouter un instrument : copie une ligne du même type (ETF, action, indice…), change id, symbol, name, isin, tickers, puis relance node build.mjs. L'id d'un titre est \"isin:\" suivi de l'ISIN ; celui d'un indice est \"tv:\" suivi du symbole TradingView ; celui d'une crypto est \"crypto:\" suivi du symbole.","tickers.tv = symbole TradingView (vérifiable sur fr.tradingview.com) ; tickers.yahoo = symbole Yahoo Finance pour l'historique (.PA = Paris, .AS = Amsterdam, .DE = Xetra, .MI = Milan, .L = Londres).","PEA : pea_eligibility_status vaut eligible, not_eligible ou unknown. Ne mets eligible que si une source le dit (fiche justETF « Éligible au PEA : Oui », DIC ou site de l'émetteur), avec l'adresse de la source dans pea_source et la date dans pea_last_checked_at (AAAA-MM-JJ). Au-delà d'un an, le Desk affiche « à revérifier ».","Les actions gardent unknown : le Desk applique la règle (société de l'UE ou de l'EEE, hors SIIC et actions de préférence). Les foncières SIIC ont siic:true.","region = zone d'EXPOSITION (ce que l'ETF achète), pas le pays du fonds (domicile). alt_group regroupe les instruments équivalents (msci_world, sp500…) : le Desk y cherche les alternatives éligibles PEA.","ter = frais courants en % par an (0.38 = 0,38 %). risk_level = indicateur de risque SRI du DIC (1 à 7). market_cap_eur = encours du fonds ou capitalisation de la société en euros, valeur approximative du jour de vérification.","Indices, taux, devises et cours de référence des matières premières : is_investable false (affichage seulement, jamais proposés à l'achat).","N'écris jamais les signes inférieur et supérieur dans les textes. Après une modification, lance node --test referentiel.test.mjs pour vérifier le fichier."],"version":1,"verifie_le":"2026-11-13","instruments":[{"id":"isin:LU1681043599","symbol":"CW8","name":"Amundi MSCI World Swap UCITS ETF EUR Acc","isin":"LU1681043599","asset_class":"actions","sub_asset_class":"monde","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"LU","domicile":"LU","sector":"diversifie","region":"monde","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=LU1681043599","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"msci_world","ter":0.38,"risk_level":4,"leverage":1,"launch_date":"2009-06-16","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:CW8","yahoo":"CW8.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":6903000000,"notes":null},{"id":"isin:IE0002XZSHO1","symbol":"WPEA","name":"iShares MSCI World Swap PEA UCITS ETF EUR (Acc)","isin":"IE0002XZSHO1","asset_class":"actions","sub_asset_class":"monde","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"IE","domicile":"IE","sector":"diversifie","region":"monde","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=IE0002XZSHO1","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"msci_world","ter":0.2,"risk_level":4,"leverage":1,"launch_date":"2024-03-26","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:WPEA","yahoo":"WPEA.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":2407000000,"notes":"TER : 0,20 % sur justETF, 0,25 % chez d'autres sources."},{"id":"isin:FR001400U5Q4","symbol":"DCAM","name":"Amundi PEA Monde (MSCI World) UCITS ETF Acc","isin":"FR001400U5Q4","asset_class":"actions","sub_asset_class":"monde","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"monde","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR001400U5Q4","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"msci_world","ter":0.2,"risk_level":4,"leverage":1,"launch_date":"2025-03-04","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:DCAM","yahoo":"DCAM.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":1937000000,"notes":null},{"id":"isin:FR0014017NX3","symbol":"GPEA","name":"Amundi PEA Global (MSCI ACWI) UCITS ETF Acc","isin":"FR0014017NX3","asset_class":"actions","sub_asset_class":"monde avec émergents","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"monde","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0014017NX3","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"msci_acwi","ter":0.3,"risk_level":4,"leverage":1,"launch_date":"2026-07-06","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:GPEA","yahoo":"GPEA.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":102000000,"notes":"Lancé le 6 juillet 2026 : historique très court."},{"id":"isin:FR0011871128","symbol":"PSP5","name":"Amundi PEA S&P 500 UCITS ETF Acc","isin":"FR0011871128","asset_class":"actions","sub_asset_class":"S&P 500","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"etats_unis","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0011871128","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"sp500","ter":0.12,"risk_level":4,"leverage":1,"launch_date":"2014-05-20","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:PSP5","yahoo":"PSP5.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":1314000000,"notes":null},{"id":"isin:FR0011550185","symbol":"ESE","name":"BNP Paribas Easy S&P 500 UCITS ETF EUR","isin":"FR0011550185","asset_class":"actions","sub_asset_class":"S&P 500","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"etats_unis","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0011550185","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"sp500","ter":0.14,"risk_level":4,"leverage":1,"launch_date":"2013-09-16","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:ESE","yahoo":"ESE.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":3792000000,"notes":null},{"id":"isin:IE000DQLYVB9","symbol":"SPEA","name":"iShares S&P 500 Swap PEA UCITS ETF EUR (Acc)","isin":"IE000DQLYVB9","asset_class":"actions","sub_asset_class":"S&P 500","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"IE","domicile":"IE","sector":"diversifie","region":"etats_unis","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=IE000DQLYVB9","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"sp500","ter":0.1,"risk_level":4,"leverage":1,"launch_date":"2025-05-29","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:SPEA","yahoo":"SPEA.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":60000000,"notes":null},{"id":"isin:FR0011871110","symbol":"PUST","name":"Amundi PEA Nasdaq-100 UCITS ETF Acc","isin":"FR0011871110","asset_class":"actions","sub_asset_class":"Nasdaq-100","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"technologie","region":"etats_unis","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0011871110","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"nasdaq100","ter":0.3,"risk_level":5,"leverage":1,"launch_date":"2014-05-20","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:PUST","yahoo":"PUST.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":1281000000,"notes":null},{"id":"isin:FR0010342592","symbol":"LQQ","name":"Amundi Nasdaq-100 Daily (2x) Leveraged UCITS ETF","isin":"FR0010342592","asset_class":"actions","sub_asset_class":"Nasdaq-100 levier 2x quotidien","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"technologie","region":"etats_unis","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0010342592","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"nasdaq100_x2","ter":0.6,"risk_level":6,"leverage":2,"launch_date":"2006-06-27","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:LQQ","yahoo":"LQQ.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":1272000000,"notes":"Produit à levier 2x quotidien : risque élevé, effet de capitalisation journalière."},{"id":"isin:LU1681038672","symbol":"RS2K","name":"Amundi Russell 2000 UCITS ETF EUR (C)","isin":"LU1681038672","asset_class":"actions","sub_asset_class":"petites capitalisations US","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"LU","domicile":"LU","sector":"diversifie","region":"etats_unis","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=LU1681038672","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"russell2000","ter":0.35,"risk_level":5,"leverage":1,"launch_date":"2014-01-07","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:RS2K","yahoo":"RS2K.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":644000000,"notes":null},{"id":"isin:FR0013412020","symbol":"PAEEM","name":"Amundi PEA Emergent (MSCI Emerging) ESG Transition UCITS ETF Acc","isin":"FR0013412020","asset_class":"actions","sub_asset_class":"émergents","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"emergents","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0013412020","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"msci_em","ter":0.3,"risk_level":4,"leverage":1,"launch_date":"2019-04-25","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:PAEEM","yahoo":"PAEEM.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":930000000,"notes":null},{"id":"isin:FR0013412012","symbol":"PAASI","name":"Amundi PEA Asie Emergente (MSCI Emerging Asia) Screened UCITS ETF","isin":"FR0013412012","asset_class":"actions","sub_asset_class":"émergents Asie","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"asie","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0013412012","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"em_asia","ter":0.3,"risk_level":4,"leverage":1,"launch_date":"2019-04-25","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:PAASI","yahoo":"PAASI.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":742000000,"notes":null},{"id":"isin:FR0013411980","symbol":"PTPXE","name":"Amundi PEA Japon (TOPIX) UCITS ETF EUR Acc","isin":"FR0013411980","asset_class":"actions","sub_asset_class":"Japon","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"japon","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0013411980","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"topix","ter":0.2,"risk_level":4,"leverage":1,"launch_date":"2019-04-25","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:PTPXE","yahoo":"PTPXE.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":151000000,"notes":null},{"id":"isin:FR0013412038","symbol":"PCEU","name":"Amundi PEA MSCI Europe UCITS ETF Acc","isin":"FR0013412038","asset_class":"actions","sub_asset_class":"Europe","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"europe","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0013412038","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"msci_europe","ter":0.15,"risk_level":4,"leverage":1,"launch_date":"2019-04-25","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:PCEU","yahoo":"PCEU.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":407000000,"notes":null},{"id":"isin:LU0908500753","symbol":"MEUD","name":"Amundi Core Stoxx Europe 600 UCITS ETF Acc","isin":"LU0908500753","asset_class":"actions","sub_asset_class":"Europe","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"LU","domicile":"LU","sector":"diversifie","region":"europe","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=LU0908500753","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"stoxx600","ter":0.07,"risk_level":4,"leverage":1,"launch_date":"2013-04-03","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:MEUD","yahoo":"MEUD.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":22994000000,"notes":"Réplication physique du STOXX Europe 600 (Royaume-Uni, Suisse compris). justETF indique NON éligible PEA au 13/11/2026 : prendre ETZ (synthétique) dans un PEA."},{"id":"isin:FR0011550193","symbol":"ETZ","name":"BNP Paribas Easy STOXX Europe 600 UCITS ETF","isin":"FR0011550193","asset_class":"actions","sub_asset_class":"Europe","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"europe","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0011550193","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"stoxx600","ter":0.19,"risk_level":4,"leverage":1,"launch_date":"2013-09-16","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:ETZ","yahoo":"ETZ.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":1173000000,"notes":null},{"id":"isin:LU1681047236","symbol":"C50","name":"Amundi Core EURO STOXX 50 UCITS ETF EUR Acc","isin":"LU1681047236","asset_class":"actions","sub_asset_class":"zone euro grandes capitalisations","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"LU","domicile":"LU","sector":"diversifie","region":"europe","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=LU1681047236","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"eurostoxx50","ter":0.09,"risk_level":5,"leverage":1,"launch_date":"2008-09-16","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:C50","yahoo":"C50.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":4188000000,"notes":"TER : 0,09 % sur justETF, 0,14 % sur TradingView."},{"id":"isin:IE00B53QG562","symbol":"CEMU","name":"iShares Core MSCI EMU UCITS ETF EUR (Acc)","isin":"IE00B53QG562","asset_class":"actions","sub_asset_class":"zone euro","vehicle":"etf","exchange":"EURONEXT","mic":"XAMS","currency":"EUR","country":"IE","domicile":"IE","sector":"diversifie","region":"europe","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=IE00B53QG562","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"msci_emu","ter":0.12,"risk_level":4,"leverage":1,"launch_date":"2010-01-12","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:CEMU","yahoo":"CEMU.AS"},"data_source":"tvscan","is_investable":true,"market_cap_eur":6199000000,"notes":"Coté à Amsterdam (CEMU) et Xetra (SXR7), pas à Paris : vérifie que ton courtier y donne accès dans le PEA."},{"id":"isin:FR0007052782","symbol":"CAC","name":"Amundi CAC 40 UCITS ETF Dist","isin":"FR0007052782","asset_class":"actions","sub_asset_class":"France","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"france","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0007052782","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"cac40","ter":0.25,"risk_level":5,"leverage":1,"launch_date":"2000-12-13","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:CAC","yahoo":"CAC.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":2612000000,"notes":"Distribuant (verse les dividendes)."},{"id":"isin:FR0013380607","symbol":"CACC","name":"Amundi CAC 40 UCITS ETF Acc","isin":"FR0013380607","asset_class":"actions","sub_asset_class":"France","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":"FR","sector":"diversifie","region":"france","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=FR0013380607","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"cac40","ter":0.25,"risk_level":5,"leverage":1,"launch_date":"2018-12-13","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:CACC","yahoo":"CACC.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":1652000000,"notes":null},{"id":"isin:LU1681046931","symbol":"C40","name":"Amundi CAC 40 ESG UCITS ETF Acc","isin":"LU1681046931","asset_class":"actions","sub_asset_class":"France ESG","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"LU","domicile":"LU","sector":"diversifie","region":"france","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=LU1681046931","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"cac40_esg","ter":0.25,"risk_level":5,"leverage":1,"launch_date":"2003-02-28","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:C40","yahoo":"C40.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":669000000,"notes":"Attention : C40 suit le CAC 40 ESG, pas le CAC 40 classique."},{"id":"isin:LU1598689153","symbol":"MMS","name":"Amundi MSCI EMU Small Cap ESG Broad Transition UCITS ETF Dist","isin":"LU1598689153","asset_class":"actions","sub_asset_class":"petites capitalisations zone euro","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"LU","domicile":"LU","sector":"diversifie","region":"europe","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=LU1598689153","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"msci_emu_small","ter":0.4,"risk_level":4,"leverage":1,"launch_date":"2005-03-31","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:MMS","yahoo":"MMS.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":581000000,"notes":"Distribuant."},{"id":"isin:LU1829219390","symbol":"BNKE","name":"Amundi Euro Stoxx Banks UCITS ETF Acc","isin":"LU1829219390","asset_class":"actions","sub_asset_class":"banques zone euro","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"LU","domicile":"LU","sector":"banques","region":"europe","pea_eligibility_status":"eligible","pea_source":"justETF (fr), « Éligible au PEA : Oui », https://www.justetf.com/fr/etf-profile.html?isin=LU1829219390","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"euro_banks","ter":0.3,"risk_level":5,"leverage":1,"launch_date":"2013-12-12","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:BNKE","yahoo":"BNKE.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":6230000000,"notes":"ETF sectoriel (banques) : peu diversifié."},{"id":"isin:IE000I4R3252","symbol":"EPEA","name":"iShares Euro Short Term Swap PEA UCITS ETF EUR (Acc)","isin":"IE000I4R3252","asset_class":"liquidites","sub_asset_class":"monétaire €STR","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"IE","domicile":"IE","sector":"diversifie","region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"euro_cash","ter":0.2,"risk_level":1,"leverage":1,"launch_date":"2025-12-11","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:EPEA","yahoo":"EPEA.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":5000000,"notes":"Sources divergentes : produit nommé PEA par l'émetteur, mais justETF (fr) affiche « Éligible au PEA : Non » au 13/11/2026. À vérifier sur le DIC iShares. Encours très faible."},{"id":"isin:FR0013416716","symbol":"GOLD","name":"Amundi Physical Gold ETC (C)","isin":"FR0013416716","asset_class":"or","sub_asset_class":"ETC or physique","vehicle":"etc_etn","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"IE","domicile":"IE","sector":null,"region":"monde","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=FR0013416716","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"gold","ter":0.12,"risk_level":4,"leverage":1,"launch_date":"2019-05-21","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:GOLD-ETFP","yahoo":"GOLD.MI"},"data_source":"tvscan","is_investable":true,"market_cap_eur":10769000000,"notes":"Sur TradingView, la ligne de Paris s'appelle GOLD-ETFP. Historique Yahoo pris à Milan (GOLD.MI, EUR, depuis 2023) car GOLD.PA est en USD et incohérent."},{"id":"isin:IE00B4ND3602","symbol":"IGLN","name":"iShares Physical Gold ETC","isin":"IE00B4ND3602","asset_class":"or","sub_asset_class":"ETC or physique","vehicle":"etc_etn","exchange":"LSE","mic":"XLON","currency":"USD","country":"IE","domicile":"IE","sector":null,"region":"monde","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=IE00B4ND3602","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"gold","ter":0.12,"risk_level":4,"leverage":1,"launch_date":"2011-04-08","siic":false,"preferred":false,"tickers":{"tv":"LSE:IGLN","yahoo":"IGLN.L"},"data_source":"tvscan","is_investable":true,"market_cap_eur":33849000000,"notes":"Ligne de Londres en dollars (à Paris : SGLN/SLGN en EUR)."},{"id":"isin:JE00B1VS3333","symbol":"PHAG","name":"WisdomTree Physical Silver","isin":"JE00B1VS3333","asset_class":"argent","sub_asset_class":"ETC argent physique","vehicle":"etc_etn","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"JE","domicile":"JE","sector":null,"region":"monde","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=JE00B1VS3333","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"silver","ter":0.49,"risk_level":5,"leverage":1,"launch_date":"2007-04-24","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:PHAG","yahoo":"PHAG.AS"},"data_source":"tvscan","is_investable":true,"market_cap_eur":2140000000,"notes":"Historique Yahoo pris à Amsterdam (PHAG.AS, EUR)."},{"id":"isin:JE00B78CGV99","symbol":"BRNT","name":"WisdomTree Brent Crude Oil","isin":"JE00B78CGV99","asset_class":"petrole","sub_asset_class":"ETC Brent (contrats à terme)","vehicle":"etc_etn","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"JE","domicile":"JE","sector":null,"region":"monde","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=JE00B78CGV99","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"brent","ter":0.49,"risk_level":null,"leverage":1,"launch_date":"2012-01-09","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:BRNT","yahoo":"BRNT.MI"},"data_source":"tvscan","is_investable":true,"market_cap_eur":829000000,"notes":"Historique Yahoo pris à Milan (BRNT.MI, EUR) : BRNT.PA n'a presque pas d'historique."},{"id":"isin:JE00BN7KB334","symbol":"NGASP","name":"WisdomTree Natural Gas","isin":"JE00BN7KB334","asset_class":"gaz","sub_asset_class":"ETC gaz naturel (contrats à terme)","vehicle":"etc_etn","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"JE","domicile":"JE","sector":null,"region":"etats_unis","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=JE00BN7KB334","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"natgas","ter":0.49,"risk_level":null,"leverage":1,"launch_date":"2006-09-27","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:NGASP","yahoo":"NGASP.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":144000000,"notes":"Très volatil (roulement des contrats à terme)."},{"id":"isin:IE00BDFL4P12","symbol":"ICOM","name":"iShares Diversified Commodity Swap UCITS ETF","isin":"IE00BDFL4P12","asset_class":"matieres_premieres","sub_asset_class":"panier large (Bloomberg Commodity)","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"IE","domicile":"IE","sector":null,"region":"monde","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=IE00BDFL4P12","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"commo_broad","ter":0.19,"risk_level":4,"leverage":1,"launch_date":"2017-07-18","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:ICOM","yahoo":"SXRS.DE"},"data_source":"tvscan","is_investable":true,"market_cap_eur":2153000000,"notes":"Historique Yahoo pris sur Xetra (SXRS.DE, EUR). TER : 0,19 % sur justETF, 0,27 % sur TradingView."},{"id":"isin:GB00B15KYH63","symbol":"AIGAP","name":"WisdomTree Agriculture","isin":"GB00B15KYH63","asset_class":"agricole","sub_asset_class":"ETC panier agricole","vehicle":"etc_etn","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"JE","domicile":"JE","sector":null,"region":"monde","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=GB00B15KYH63","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"agri","ter":0.49,"risk_level":null,"leverage":1,"launch_date":"2006-09-27","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:AIGAP","yahoo":"AIGAP.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":650000000,"notes":null},{"id":"isin:IE00B4WXJJ64","symbol":"IEGA","name":"iShares Core Euro Government Bond UCITS ETF (Dist)","isin":"IE00B4WXJJ64","asset_class":"oblig_etat","sub_asset_class":"obligations d'État zone euro","vehicle":"etf","exchange":"EURONEXT","mic":"XAMS","currency":"EUR","country":"IE","domicile":"IE","sector":null,"region":"europe","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=IE00B4WXJJ64","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"euro_gov_bonds","ter":0.07,"risk_level":3,"leverage":1,"launch_date":"2009-04-17","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:IEGA","yahoo":"IEGA.AS"},"data_source":"tvscan","is_investable":true,"market_cap_eur":5518000000,"notes":null},{"id":"isin:IE00B3F81R35","symbol":"IEAC","name":"iShares Core EUR Corporate Bond UCITS ETF (Dist)","isin":"IE00B3F81R35","asset_class":"oblig_entreprise","sub_asset_class":"obligations d'entreprise EUR","vehicle":"etf","exchange":"EURONEXT","mic":"XAMS","currency":"EUR","country":"IE","domicile":"IE","sector":null,"region":"europe","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=IE00B3F81R35","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"euro_corp_bonds","ter":0.09,"risk_level":2,"leverage":1,"launch_date":"2009-03-06","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:IEAC","yahoo":"IEAC.AS"},"data_source":"tvscan","is_investable":true,"market_cap_eur":10207000000,"notes":null},{"id":"isin:IE00BDBRDM35","symbol":"AGGH","name":"iShares Core Global Aggregate Bond UCITS ETF EUR Hedged (Acc)","isin":"IE00BDBRDM35","asset_class":"obligations","sub_asset_class":"obligations monde couvertes en EUR","vehicle":"etf","exchange":"EURONEXT","mic":"XAMS","currency":"EUR","country":"IE","domicile":"IE","sector":null,"region":"monde","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=IE00BDBRDM35","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"global_agg","ter":0.1,"risk_level":2,"leverage":1,"launch_date":"2017-11-21","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:AGGH","yahoo":"AGGH.AS"},"data_source":"tvscan","is_investable":true,"market_cap_eur":2727000000,"notes":null},{"id":"isin:LU1190417599","symbol":"CSH2","name":"Amundi Smart Overnight Return UCITS ETF Acc","isin":"LU1190417599","asset_class":"liquidites","sub_asset_class":"monétaire €STR","vehicle":"etf","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"LU","domicile":"LU","sector":null,"region":"europe","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=LU1190417599","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"euro_cash","ter":0.1,"risk_level":1,"leverage":1,"launch_date":"2015-03-02","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:CSH2","yahoo":"CSH2.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":7480000000,"notes":null},{"id":"isin:IE00B4L5Y983","symbol":"IWDA","name":"iShares Core MSCI World UCITS ETF USD (Acc)","isin":"IE00B4L5Y983","asset_class":"actions","sub_asset_class":"monde","vehicle":"etf","exchange":"EURONEXT","mic":"XAMS","currency":"EUR","country":"IE","domicile":"IE","sector":"diversifie","region":"monde","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=IE00B4L5Y983","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"msci_world","ter":0.2,"risk_level":4,"leverage":1,"launch_date":"2009-09-25","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:IWDA","yahoo":"IWDA.AS"},"data_source":"tvscan","is_investable":true,"market_cap_eur":132233000000,"notes":"Aussi coté EUNL sur Xetra. Réplication physique (environ 70 % d'actions US)."},{"id":"isin:IE00B5BMR087","symbol":"SXR8","name":"iShares Core S&P 500 UCITS ETF USD (Acc)","isin":"IE00B5BMR087","asset_class":"actions","sub_asset_class":"S&P 500","vehicle":"etf","exchange":"XETR","mic":"XETR","currency":"EUR","country":"IE","domicile":"IE","sector":"diversifie","region":"etats_unis","pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=IE00B5BMR087","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"sp500","ter":0.07,"risk_level":4,"leverage":1,"launch_date":"2010-05-19","siic":false,"preferred":false,"tickers":{"tv":"XETR:SXR8","yahoo":"SXR8.DE"},"data_source":"tvscan","is_investable":true,"market_cap_eur":138978000000,"notes":"Aussi coté CSPX à Amsterdam et Londres. Réplication physique d'actions US."},{"id":"isin:CH0454664001","symbol":"ABTC","name":"21Shares Bitcoin ETP","isin":"CH0454664001","asset_class":"crypto","sub_asset_class":"ETN bitcoin physique","vehicle":"etc_etn","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"CH","domicile":"CH","sector":null,"region":null,"pea_eligibility_status":"not_eligible","pea_source":"justETF (fr), « Éligible au PEA : Non », https://www.justetf.com/fr/etf-profile.html?isin=CH0454664001","pea_last_checked_at":"2026-11-13","pea_pme_status":"unknown","alt_group":"bitcoin","ter":1.49,"risk_level":null,"leverage":1,"launch_date":"2019-02-26","siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:ABTC","yahoo":"ABTC.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":535000000,"notes":null},{"id":"isin:US78462F1030","symbol":"SPY","name":"SPDR S&P 500 ETF Trust","isin":"US78462F1030","asset_class":"actions","sub_asset_class":"S&P 500","vehicle":"etf","exchange":"AMEX","mic":"ARCX","currency":"USD","country":"US","domicile":"US","sector":"diversifie","region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"sp500","ter":0.0945,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"AMEX:SPY","yahoo":"SPY"},"data_source":"tvscan","is_investable":true,"market_cap_eur":719366000000,"notes":"ETF américain (non UCITS) : sans DIC, en pratique inaccessible à un particulier européen. Non éligible PEA par la règle (fonds hors UE/EEE)."},{"id":"isin:FR0000121014","symbol":"MC","name":"LVMH Moët Hennessy Louis Vuitton","isin":"FR0000121014","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"luxe","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:MC","yahoo":"MC.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":199236000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0000120271","symbol":"TTE","name":"TotalEnergies","isin":"FR0000120271","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"énergie","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:TTE","yahoo":"TTE.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":179958000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:NL0000235190","symbol":"AIR","name":"Airbus","isin":"NL0000235190","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"NL","domicile":null,"sector":"aéronautique et défense","region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:AIR","yahoo":"AIR.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":164805000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier. Siège aux Pays-Bas (ISIN NL), coté à Paris."},{"id":"isin:FR0000121972","symbol":"SU","name":"Schneider Electric","isin":"FR0000121972","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"équipements électriques","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:SU","yahoo":"SU.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":144343000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0000120321","symbol":"OR","name":"L'Oréal","isin":"FR0000120321","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"cosmétiques","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:OR","yahoo":"OR.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":237675000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0000120578","symbol":"SAN","name":"Sanofi","isin":"FR0000120578","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"santé","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:SAN","yahoo":"SAN.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":105521000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0000131104","symbol":"BNP","name":"BNP Paribas","isin":"FR0000131104","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"banques","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:BNP","yahoo":"BNP.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":105680000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0000120073","symbol":"AI","name":"Air Liquide","isin":"FR0000120073","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"chimie","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:AI","yahoo":"AI.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":122811000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0000052292","symbol":"RMS","name":"Hermès International","isin":"FR0000052292","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"luxe","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:RMS","yahoo":"RMS.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":141513000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0000073272","symbol":"SAF","name":"Safran","isin":"FR0000073272","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"aéronautique et défense","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:SAF","yahoo":"SAF.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":130186000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0000121667","symbol":"EL","name":"EssilorLuxottica","isin":"FR0000121667","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"santé","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:EL","yahoo":"EL.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":83291000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0000120628","symbol":"CS","name":"AXA","isin":"FR0000120628","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"assurance","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:CS","yahoo":"CS.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":95882000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:DE0007164600","symbol":"SAP","name":"SAP","isin":"DE0007164600","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"XETR","mic":"XETR","currency":"EUR","country":"DE","domicile":null,"sector":"logiciels","region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"XETR:SAP","yahoo":"SAP.DE"},"data_source":"tvscan","is_investable":true,"market_cap_eur":248133000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:NL0010273215","symbol":"ASML","name":"ASML Holding","isin":"NL0010273215","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"EURONEXT","mic":"XAMS","currency":"EUR","country":"NL","domicile":null,"sector":"semi-conducteurs","region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:ASML","yahoo":"ASML.AS"},"data_source":"tvscan","is_investable":true,"market_cap_eur":525850000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:DK0062498333","symbol":"NOVO B","name":"Novo Nordisk (B)","isin":"DK0062498333","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"OMXCOP","mic":"XCSE","currency":"DKK","country":"DK","domicile":null,"sector":"santé","region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"OMXCOP:NOVO_B","yahoo":"NOVO-B.CO"},"data_source":"tvscan","is_investable":true,"market_cap_eur":163086000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier. Coté à Copenhague en couronnes danoises : vérifie que ton courtier y donne accès."},{"id":"isin:DE0007236101","symbol":"SIE","name":"Siemens","isin":"DE0007236101","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"XETR","mic":"XETR","currency":"EUR","country":"DE","domicile":null,"sector":"industrie","region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"XETR:SIE","yahoo":"SIE.DE"},"data_source":"tvscan","is_investable":true,"market_cap_eur":214703000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:DE0008404005","symbol":"ALV","name":"Allianz","isin":"DE0008404005","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"XETR","mic":"XETR","currency":"EUR","country":"DE","domicile":null,"sector":"assurance","region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"XETR:ALV","yahoo":"ALV.DE"},"data_source":"tvscan","is_investable":true,"market_cap_eur":175921000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:US0378331005","symbol":"AAPL","name":"Apple","isin":"US0378331005","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"NASDAQ","mic":"XNAS","currency":"USD","country":"US","domicile":null,"sector":"technologie","region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"NASDAQ:AAPL","yahoo":"AAPL"},"data_source":"tvscan","is_investable":true,"market_cap_eur":4664852000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:US5949181045","symbol":"MSFT","name":"Microsoft","isin":"US5949181045","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"NASDAQ","mic":"XNAS","currency":"USD","country":"US","domicile":null,"sector":"logiciels","region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"NASDAQ:MSFT","yahoo":"MSFT"},"data_source":"tvscan","is_investable":true,"market_cap_eur":3513124000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:US67066G1040","symbol":"NVDA","name":"NVIDIA","isin":"US67066G1040","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"NASDAQ","mic":"XNAS","currency":"USD","country":"US","domicile":null,"sector":"semi-conducteurs","region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"NASDAQ:NVDA","yahoo":"NVDA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":3622826000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:US0231351067","symbol":"AMZN","name":"Amazon.com","isin":"US0231351067","asset_class":"actions","sub_asset_class":"action","vehicle":"titre","exchange":"NASDAQ","mic":"XNAS","currency":"USD","country":"US","domicile":null,"sector":"commerce en ligne","region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"NASDAQ:AMZN","yahoo":"AMZN"},"data_source":"tvscan","is_investable":true,"market_cap_eur":2615795000000,"notes":"Statut PEA donné par la règle (pays de l'ISIN), à confirmer chez ton courtier."},{"id":"isin:FR0010040865","symbol":"GFC","name":"Gecina","isin":"FR0010040865","asset_class":"immobilier_cote","sub_asset_class":"foncière SIIC","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"immobilier","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":true,"preferred":false,"tickers":{"tv":"EURONEXT:GFC","yahoo":"GFC.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":4778000000,"notes":"Foncière au statut SIIC (exonérée d'IS) : exclue du PEA depuis 2011. Statut SIIC : culture-financiere.com et abcbourse.com, consultés le 13/11/2026."},{"id":"isin:FR0000121964","symbol":"LI","name":"Klépierre","isin":"FR0000121964","asset_class":"immobilier_cote","sub_asset_class":"foncière SIIC","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"immobilier","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":true,"preferred":false,"tickers":{"tv":"EURONEXT:LI","yahoo":"LI.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":10455000000,"notes":"Foncière au statut SIIC (exonérée d'IS) : exclue du PEA depuis 2011. Statut SIIC : culture-financiere.com et abcbourse.com, consultés le 13/11/2026."},{"id":"isin:FR0000064578","symbol":"COV","name":"Covivio","isin":"FR0000064578","asset_class":"immobilier_cote","sub_asset_class":"foncière SIIC","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"immobilier","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":true,"preferred":false,"tickers":{"tv":"EURONEXT:COV","yahoo":"COV.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":4907000000,"notes":"Foncière au statut SIIC (exonérée d'IS) : exclue du PEA depuis 2011. Statut SIIC : culture-financiere.com et abcbourse.com, consultés le 13/11/2026."},{"id":"isin:FR0013326246","symbol":"URW","name":"Unibail-Rodamco-Westfield","isin":"FR0013326246","asset_class":"immobilier_cote","sub_asset_class":"foncière SIIC","vehicle":"titre","exchange":"EURONEXT","mic":"XPAR","currency":"EUR","country":"FR","domicile":null,"sector":"immobilier","region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":true,"preferred":false,"tickers":{"tv":"EURONEXT:URW","yahoo":"URW.PA"},"data_source":"tvscan","is_investable":true,"market_cap_eur":13461000000,"notes":"Foncière au statut SIIC (exonérée d'IS) : exclue du PEA depuis 2011. Statut SIIC : culture-financiere.com et abcbourse.com, consultés le 13/11/2026. Titre jumelé (stapled) Unibail-Rodamco-Westfield SE + WFD Unibail-Rodamco N.V."},{"id":"tv:EURONEXT:PX1","symbol":"CAC40","name":"CAC 40","isin":"FR0003500008","asset_class":"actions","sub_asset_class":"indice France","vehicle":"indice","exchange":"EURONEXT","mic":null,"currency":"EUR","country":"FR","domicile":null,"sector":null,"region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"cac40","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:PX1","yahoo":"^FCHI"},"data_source":"tvscan","is_investable":false,"notes":null},{"id":"tv:EURONEXT:PX4","symbol":"SBF120","name":"SBF 120","isin":"FR0003999481","asset_class":"actions","sub_asset_class":"indice France","vehicle":"indice","exchange":"EURONEXT","mic":null,"currency":"EUR","country":"FR","domicile":null,"sector":null,"region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"EURONEXT:PX4","yahoo":"^SBF120"},"data_source":"tvscan","is_investable":false,"notes":null},{"id":"tv:SP:SPX","symbol":"SPX","name":"S&P 500","isin":null,"asset_class":"actions","sub_asset_class":"indice États-Unis","vehicle":"indice","exchange":"SP","mic":null,"currency":"USD","country":"US","domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"sp500","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"SP:SPX","yahoo":"^GSPC"},"data_source":"tvscan","is_investable":false,"notes":null},{"id":"tv:NASDAQ:NDX","symbol":"NDX","name":"Nasdaq 100","isin":null,"asset_class":"actions","sub_asset_class":"indice États-Unis","vehicle":"indice","exchange":"NASDAQ","mic":null,"currency":"USD","country":"US","domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"nasdaq100","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"NASDAQ:NDX","yahoo":"^NDX"},"data_source":"tvscan","is_investable":false,"notes":null},{"id":"tv:NASDAQ:IXIC","symbol":"IXIC","name":"Nasdaq Composite","isin":null,"asset_class":"actions","sub_asset_class":"indice États-Unis","vehicle":"indice","exchange":"NASDAQ","mic":null,"currency":"USD","country":"US","domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"NASDAQ:IXIC","yahoo":"^IXIC"},"data_source":"tvscan","is_investable":false,"notes":null},{"id":"tv:DJ:DJI","symbol":"DJI","name":"Dow Jones Industrial Average","isin":null,"asset_class":"actions","sub_asset_class":"indice États-Unis","vehicle":"indice","exchange":"DJ","mic":null,"currency":"USD","country":"US","domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"DJ:DJI","yahoo":"^DJI"},"data_source":"tvscan","is_investable":false,"notes":null},{"id":"tv:TVC:SX5E","symbol":"SX5E","name":"Euro Stoxx 50","isin":null,"asset_class":"actions","sub_asset_class":"indice zone euro","vehicle":"indice","exchange":"TVC","mic":null,"currency":"EUR","country":null,"domicile":null,"sector":null,"region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"eurostoxx50","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:SX5E","yahoo":"^STOXX50E"},"data_source":"tvscan","is_investable":false,"notes":"Cours TradingView en continu (CFD)."},{"id":"tv:STOXX:SXXP","symbol":"SXXP","name":"STOXX Europe 600","isin":null,"asset_class":"actions","sub_asset_class":"indice Europe","vehicle":"indice","exchange":"STOXX","mic":null,"currency":"EUR","country":null,"domicile":null,"sector":null,"region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"stoxx600","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"STOXX:SXXP","yahoo":"^STOXX"},"data_source":"tvscan","is_investable":false,"notes":null},{"id":"tv:XETR:DAX","symbol":"DAX","name":"DAX","isin":null,"asset_class":"actions","sub_asset_class":"indice Allemagne","vehicle":"indice","exchange":"XETR","mic":null,"currency":"EUR","country":"DE","domicile":null,"sector":null,"region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"XETR:DAX","yahoo":"^GDAXI"},"data_source":"tvscan","is_investable":false,"notes":null},{"id":"tv:TVC:VIX","symbol":"VIX","name":"VIX (volatilité implicite du S&P 500)","isin":null,"asset_class":"actions","sub_asset_class":"volatilité","vehicle":"indice","exchange":"TVC","mic":null,"currency":null,"country":"US","domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:VIX","yahoo":"^VIX"},"data_source":"tvscan","is_investable":false,"notes":"Mesure de la peur du marché, en points."},{"id":"tv:TVC:GOLD","symbol":"XAUUSD","name":"Or (once, en dollars)","isin":null,"asset_class":"or","sub_asset_class":"cours de référence","vehicle":"indice","exchange":"TVC","mic":null,"currency":"USD","country":null,"domicile":null,"sector":null,"region":"monde","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"gold","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:GOLD","yahoo":"GC=F"},"data_source":"tvscan","is_investable":false,"notes":"Historique Yahoo : contrat à terme COMEX (GC=F)."},{"id":"tv:TVC:SILVER","symbol":"XAGUSD","name":"Argent (once, en dollars)","isin":null,"asset_class":"argent","sub_asset_class":"cours de référence","vehicle":"indice","exchange":"TVC","mic":null,"currency":"USD","country":null,"domicile":null,"sector":null,"region":"monde","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"silver","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:SILVER","yahoo":"SI=F"},"data_source":"tvscan","is_investable":false,"notes":"Historique Yahoo : contrat à terme COMEX (SI=F)."},{"id":"tv:FX:USOIL","symbol":"WTI","name":"Pétrole WTI (CFD)","isin":null,"asset_class":"petrole","sub_asset_class":"cours de référence WTI","vehicle":"indice","exchange":"FX","mic":null,"currency":"USD","country":null,"domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"wti","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"FX:USOIL","yahoo":"CL=F"},"data_source":"tvscan","is_investable":false,"notes":"TVC:USOIL ne répond pas sur le scanner : utiliser FX:USOIL."},{"id":"tv:NYMEX:CL1!","symbol":"CL1","name":"Pétrole WTI, contrat à terme continu NYMEX","isin":null,"asset_class":"petrole","sub_asset_class":"contrat à terme WTI","vehicle":"indice","exchange":"NYMEX","mic":null,"currency":"USD","country":null,"domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"wti","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"NYMEX:CL1!","yahoo":"CL=F"},"data_source":"tvscan","is_investable":false,"notes":"Différé de 10 minutes."},{"id":"tv:FX:UKOIL","symbol":"BRENT","name":"Pétrole Brent (CFD)","isin":null,"asset_class":"petrole","sub_asset_class":"cours de référence Brent","vehicle":"indice","exchange":"FX","mic":null,"currency":"USD","country":null,"domicile":null,"sector":null,"region":"monde","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"brent","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"FX:UKOIL","yahoo":"BZ=F"},"data_source":"tvscan","is_investable":false,"notes":"TVC:UKOIL ne répond pas sur le scanner : utiliser FX:UKOIL."},{"id":"tv:NYMEX:NG1!","symbol":"NG1","name":"Gaz naturel Henry Hub, contrat à terme continu","isin":null,"asset_class":"gaz","sub_asset_class":"contrat à terme gaz naturel","vehicle":"indice","exchange":"NYMEX","mic":null,"currency":"USD","country":null,"domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"natgas","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"NYMEX:NG1!","yahoo":"NG=F"},"data_source":"tvscan","is_investable":false,"notes":"Désactivé par défaut (très volatil). Différé de 10 minutes."},{"id":"tv:TVC:FR10Y","symbol":"FR10Y","name":"Taux de l'État français à 10 ans (OAT)","isin":null,"asset_class":"oblig_etat","sub_asset_class":"taux souverain 10 ans","vehicle":"taux","exchange":"TVC","mic":null,"currency":null,"country":"FR","domicile":null,"sector":null,"region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:FR10Y"},"data_source":"tvscan","is_investable":false,"notes":"Rendement en %, pas d'historique Yahoo."},{"id":"tv:TVC:FR02Y","symbol":"FR02Y","name":"Taux de l'État français à 2 ans","isin":null,"asset_class":"oblig_etat","sub_asset_class":"taux souverain 2 ans","vehicle":"taux","exchange":"TVC","mic":null,"currency":null,"country":"FR","domicile":null,"sector":null,"region":"france","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:FR02Y"},"data_source":"tvscan","is_investable":false,"notes":"Rendement en %."},{"id":"tv:TVC:DE10Y","symbol":"DE10Y","name":"Taux de l'État allemand à 10 ans (Bund)","isin":null,"asset_class":"oblig_etat","sub_asset_class":"taux souverain 10 ans","vehicle":"taux","exchange":"TVC","mic":null,"currency":null,"country":"DE","domicile":null,"sector":null,"region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:DE10Y"},"data_source":"tvscan","is_investable":false,"notes":"Rendement en %."},{"id":"tv:TVC:IT10Y","symbol":"IT10Y","name":"Taux de l'État italien à 10 ans (BTP)","isin":null,"asset_class":"oblig_etat","sub_asset_class":"taux souverain 10 ans","vehicle":"taux","exchange":"TVC","mic":null,"currency":null,"country":"IT","domicile":null,"sector":null,"region":"europe","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:IT10Y"},"data_source":"tvscan","is_investable":false,"notes":"Rendement en %."},{"id":"tv:TVC:US10Y","symbol":"US10Y","name":"Taux de l'État américain à 10 ans","isin":null,"asset_class":"oblig_etat","sub_asset_class":"taux souverain 10 ans","vehicle":"taux","exchange":"TVC","mic":null,"currency":null,"country":"US","domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:US10Y","yahoo":"^TNX"},"data_source":"tvscan","is_investable":false,"notes":"Rendement en %. Yahoo ^TNX (indice CBOE)."},{"id":"tv:TVC:US02Y","symbol":"US02Y","name":"Taux de l'État américain à 2 ans","isin":null,"asset_class":"oblig_etat","sub_asset_class":"taux souverain 2 ans","vehicle":"taux","exchange":"TVC","mic":null,"currency":null,"country":"US","domicile":null,"sector":null,"region":"etats_unis","pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"TVC:US02Y"},"data_source":"tvscan","is_investable":false,"notes":"Rendement en %."},{"id":"tv:FX_IDC:EURUSD","symbol":"EURUSD","name":"Euro / dollar américain","isin":null,"asset_class":"devises","sub_asset_class":"change","vehicle":"indice","exchange":"FX_IDC","mic":null,"currency":"USD","country":null,"domicile":null,"sector":null,"region":null,"pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"FX_IDC:EURUSD","yahoo":"EURUSD=X"},"data_source":"tvscan","is_investable":false,"notes":"Nombre de dollars pour 1 euro."},{"id":"tv:FX_IDC:EURGBP","symbol":"EURGBP","name":"Euro / livre sterling","isin":null,"asset_class":"devises","sub_asset_class":"change","vehicle":"indice","exchange":"FX_IDC","mic":null,"currency":"GBP","country":null,"domicile":null,"sector":null,"region":null,"pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"FX_IDC:EURGBP","yahoo":"EURGBP=X"},"data_source":"tvscan","is_investable":false,"notes":"Nombre de livres pour 1 euro."},{"id":"tv:FX_IDC:EURCHF","symbol":"EURCHF","name":"Euro / franc suisse","isin":null,"asset_class":"devises","sub_asset_class":"change","vehicle":"indice","exchange":"FX_IDC","mic":null,"currency":"CHF","country":null,"domicile":null,"sector":null,"region":null,"pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"FX_IDC:EURCHF","yahoo":"EURCHF=X"},"data_source":"tvscan","is_investable":false,"notes":"Nombre de francs suisses pour 1 euro."},{"id":"tv:FX_IDC:EURJPY","symbol":"EURJPY","name":"Euro / yen","isin":null,"asset_class":"devises","sub_asset_class":"change","vehicle":"indice","exchange":"FX_IDC","mic":null,"currency":"JPY","country":null,"domicile":null,"sector":null,"region":null,"pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"tv":"FX_IDC:EURJPY","yahoo":"EURJPY=X"},"data_source":"tvscan","is_investable":false,"notes":"Nombre de yens pour 1 euro."},{"id":"crypto:BTC","symbol":"BTC","name":"Bitcoin","isin":null,"asset_class":"crypto","sub_asset_class":"crypto-actif","vehicle":"spot_crypto","exchange":"OKX","mic":null,"currency":"USDT","country":null,"domicile":null,"sector":null,"region":null,"pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":"bitcoin","ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"okx":"BTC-USDT","binance":"BTCUSDT","tv":"OKX:BTCUSDT"},"data_source":"crypto","is_investable":true,"notes":null},{"id":"crypto:ETH","symbol":"ETH","name":"Ethereum","isin":null,"asset_class":"crypto","sub_asset_class":"crypto-actif","vehicle":"spot_crypto","exchange":"OKX","mic":null,"currency":"USDT","country":null,"domicile":null,"sector":null,"region":null,"pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"okx":"ETH-USDT","binance":"ETHUSDT","tv":"OKX:ETHUSDT"},"data_source":"crypto","is_investable":true,"notes":null},{"id":"crypto:SOL","symbol":"SOL","name":"Solana","isin":null,"asset_class":"crypto","sub_asset_class":"crypto-actif","vehicle":"spot_crypto","exchange":"OKX","mic":null,"currency":"USDT","country":null,"domicile":null,"sector":null,"region":null,"pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"okx":"SOL-USDT","binance":"SOLUSDT","tv":"OKX:SOLUSDT"},"data_source":"crypto","is_investable":true,"notes":null},{"id":"crypto:USDC","symbol":"USDC","name":"USD Coin","isin":null,"asset_class":"stablecoin","sub_asset_class":"stablecoin adossé au dollar","vehicle":"spot_crypto","exchange":"OKX","mic":null,"currency":"USDT","country":null,"domicile":null,"sector":null,"region":null,"pea_eligibility_status":"unknown","pea_source":null,"pea_last_checked_at":null,"pea_pme_status":"unknown","alt_group":null,"ter":null,"risk_level":null,"leverage":1,"launch_date":null,"siic":false,"preferred":false,"tickers":{"okx":"USDC-USDT","binance":"USDCUSDT","tv":"OKX:USDCUSDT"},"data_source":"crypto","is_investable":true,"notes":null}]},allocation:{"_doc":"Réglages de l'allocation mensuelle et du screener mensuel. Modifiable depuis le site GitHub (garder guillemets et virgules), puis node build.mjs. Les poids sont en % ; chaque profil doit totaliser 100. Ce sont des MODÈLES PUBLICS d'exemple, identiques pour tous, visibles et modifiables : ce n'est pas un conseil personnalisé.","version":1,"poches":[{"id":"actions_titres","label":"Actions (titres en direct)","classe":"actions","vehicules":["titre"]},{"id":"actions_etf","label":"ETF actions","classe":"actions","vehicules":["etf","fonds"]},{"id":"obligations","label":"Obligations","classe":"obligations","vehicules":["etf","fonds"]},{"id":"or","label":"Or","classe":"or","vehicules":["etc_etn","etf"]},{"id":"argent","label":"Argent","classe":"argent","vehicules":["etc_etn","etf"]},{"id":"petrole","label":"Pétrole","classe":"petrole","vehicules":["etc_etn","etf"]},{"id":"gaz","label":"Gaz naturel","classe":"gaz","vehicules":["etc_etn","etf"]},{"id":"matieres_premieres","label":"Matières premières (panier)","classe":"matieres_premieres","vehicules":["etc_etn","etf"]},{"id":"agricole","label":"Matières premières agricoles","classe":"agricole","vehicules":["etc_etn","etf"]},{"id":"immobilier_cote","label":"Immobilier coté","classe":"immobilier_cote","vehicules":["titre","etf"]},{"id":"crypto","label":"Crypto","classe":"crypto","vehicules":["spot_crypto","etc_etn"]},{"id":"liquidites","label":"Liquidités","classe":"liquidites","vehicules":["cash","etf","fonds"]}],"profils":{"prudent":{"label":"Prudent","poids":{"actions_etf":22,"actions_titres":3,"obligations":40,"or":7,"argent":0,"petrole":0,"gaz":0,"matieres_premieres":3,"agricole":0,"immobilier_cote":0,"crypto":0,"liquidites":25},"vol_cible":5,"inclinaison_max":0.15,"max_titres_vifs":5,"risque_max_sri":4},"modere":{"label":"Modéré","poids":{"actions_etf":40,"actions_titres":8,"obligations":25,"or":7,"argent":1,"petrole":1,"gaz":0,"matieres_premieres":3,"agricole":0,"immobilier_cote":0,"crypto":3,"liquidites":12},"vol_cible":8,"inclinaison_max":0.25,"max_titres_vifs":15,"risque_max_sri":5},"dynamique":{"label":"Dynamique","poids":{"actions_etf":52,"actions_titres":15,"obligations":10,"or":6,"argent":2,"petrole":2,"gaz":0,"matieres_premieres":2,"agricole":0,"immobilier_cote":0,"crypto":7,"liquidites":4},"vol_cible":12,"inclinaison_max":0.35,"max_titres_vifs":25,"risque_max_sri":6},"agressif":{"label":"Agressif","poids":{"actions_etf":50,"actions_titres":22,"obligations":0,"or":5,"argent":2,"petrole":3,"gaz":0,"matieres_premieres":1,"agricole":0,"immobilier_cote":0,"crypto":15,"liquidites":2},"vol_cible":18,"inclinaison_max":0.5,"max_titres_vifs":35,"risque_max_sri":7}},"horizons":{"_doc":"Part des poches risquées conservée selon l'horizon (le reste glisse vers obligations puis liquidités, si elles sont cochées).","court":{"label":"Court terme (\u003c 2 ans)","facteur_risque":0.6},"moyen":{"label":"Moyen terme (2 à 5 ans)","facteur_risque":0.85},"long":{"label":"Long terme (> 5 ans)","facteur_risque":1}},"score_rotation":{"_doc":"Pondérations du score de rotation d'une classe (série temporelle, 5 ans). Total 100.","momentum_ajuste":35,"tendance":25,"drawdown":15,"volatilite_inverse":15,"diversification":10},"MSCREEN_WEIGHTS":{"_doc":"Pondérations du score global du screener mensuel. Total 100.","momentum":30,"tendance":25,"risque":15,"volatilite":15,"diversification":15},"screener_seuils":{"renforcer_score_min":70,"renforcer_tendance_min":75,"reduire_score_max":40,"reduire_tendance_max":25,"conserver_score_min":50,"rsi_surachat":75,"rsi_survente":25},"regime":{"_doc":"Détection du régime de marché à partir de l'indice actions de référence et du VIX.","indice_reference":"isin:LU1681043599","vix_haut":25,"vix_tres_haut":35,"percentile_vol_haute":80,"transfert_risk_off_pct":30},"selection":{"instruments_par_poche_max":3,"etf_encours_min_eur":50000000,"etf_spread_max_bps":30,"action_valeur_echangee_min_eur":500000,"donnees_max_seances":5,"historique_min_seances":252,"historique_min_seances_monetaire":60,"liquidites_par_enveloppe":"especes_du_compte","liquidites_pea_doc":"Dans un PEA ou un PEA-PME, la poche Liquidités est logée en espèces du compte (cash_balance). Un ETF monétaire n'y est proposé que si son statut PEA est confirmé par une source (EPEA : sources contradictoires au 16/11/2026, donc « à vérifier »).","liste_blanche_liquidites_pea":["isin:IE000I4R3252"]},"couts":{"_doc":"Coûts estimés par type de compte : courtage en points de base (1 bp = 0,01 %), minimum par ordre en €, frais de change pour un titre hors EUR. Ajuste-les à ton courtier.","PEA":{"courtage_bps":10,"min_eur":1,"fx_bps":0},"PEA_PME":{"courtage_bps":10,"min_eur":1,"fx_bps":0},"CTO":{"courtage_bps":10,"min_eur":1,"fx_bps":25},"assurance_vie":{"courtage_bps":0,"min_eur":0,"fx_bps":0},"crypto_wallet":{"courtage_bps":10,"min_eur":0,"fx_bps":0},"bank_account":{"courtage_bps":0,"min_eur":0,"fx_bps":0},"other":{"courtage_bps":20,"min_eur":2,"fx_bps":25},"spread_bps_defaut":{"etf":10,"titre":15,"etc_etn":15,"spot_crypto":5,"fonds":0,"cash":0},"slippage_bps":5},"proxies":{"_doc":"Série historique longue utilisée pour mesurer chaque poche (backtest, scores). type TR = rendement total (dividendes inclus) ; PR = indice de prix (interdit au backtest) ; future_continu = interdit. a_verifier = ticker à confirmer en phase 3.","actions_etf":{"yahoo":"CW8.PA","type":"TR","devise":"EUR","debut":"2009-04-01","a_verifier":false},"actions_titres":{"yahoo":"CW8.PA","type":"TR","devise":"EUR","debut":"2009-04-01","a_verifier":false},"obligations":{"yahoo":"IEGA.AS","type":"TR","devise":"EUR","debut":null,"a_verifier":true},"or":{"yahoo":"4GLD.DE","type":"TR","devise":"EUR","debut":null,"a_verifier":true},"argent":{"yahoo":"PHAG.L","type":"TR","devise":"USD","debut":null,"a_verifier":true},"petrole":{"yahoo":"BRNT.L","type":"TR","devise":"USD","debut":null,"a_verifier":true},"crypto":{"yahoo":"BTC-EUR","type":"TR","devise":"EUR","debut":"2014-09-17","a_verifier":true},"liquidites":{"taux":"ECB:EST.B.EU000A2X2A25.WT","type":"taux","devise":"EUR","debut":"2019-10-01","avant":"EONIA - 8,5 bp","a_verifier":false}}},fiscal:{"_doc":"Règles fiscales INDICATIVES (France), utilisées pour estimer un coût fiscal et pour l'option « après impôt » du backtest. Aucun calcul fiscal définitif. Chaque règle a une date d'effet, une source et un statut : V = vérifié sur la source citée, A = à confirmer. Mettre à jour après chaque loi de finances.","version":1,"verifie_le":"2026-11-12","avertissement":"Fiscalité indicative, simplifiée, sans valeur de conseil fiscal. Vérifie ta situation auprès de ton établissement ou d'un professionnel.","taux":{"ir_pfu":{"valeur":12.8,"depuis":"2018-01-01","source":"https://www.service-public.gouv.fr/particuliers/vosdroits/F2329","statut":"V"},"prelevements_sociaux":{"valeur":18.6,"depuis":"2026-01-01","avant":17.2,"source":"https://placement.meilleurtaux.com/bourse/actualites/2026-fevrier/taux-prelevements-sociaux-applique-pea-passe-desormais-18-6.html","statut":"V","note":"Hausse de la CSG de 1,4 point (LFSS 2026). L'assurance-vie, le PEL/CEL et les revenus fonciers sont exclus de la hausse. Le taux appliqué aux gains anciens des PEA ouverts avant 2018 peut différer (taux historiques) : approximation."},"prelevements_sociaux_assurance_vie":{"valeur":17.2,"depuis":"2018-01-01","source":"https://www.legifiscal.fr/actualites-fiscales/4369-janvier-2026-hausse-csg-appliquera-certains-placements-financiers.html","statut":"A"}},"enveloppes":{"CTO":{"label":"Compte-titres ordinaire","regle":"Plus-values et dividendes soumis au PFU (12,8 % + 18,6 % = 31,4 %), ou au barème sur option. Prix de revient = prix moyen pondéré. Moins-values imputables sur les plus-values de même nature pendant 10 ans.","taux_global":31.4,"moins_values_report_ans":10,"statut":"V"},"PEA":{"label":"PEA","regle":"Aucun impôt tant que l'argent reste dans le plan. Retrait avant 5 ans : clôture du plan (sauf exceptions) et gain taxé 31,4 %. Après 5 ans : gain exonéré d'impôt sur le revenu, seuls les prélèvements sociaux (18,6 %) s'appliquent ; un retrait partiel ne clôt plus le plan.","anciennete_exoneration_ans":5,"taux_avant_5_ans":31.4,"taux_apres_5_ans":18.6,"plafond_versements_eur":150000,"source":"https://www.service-public.gouv.fr/particuliers/vosdroits/F2385","statut":"V"},"PEA_PME":{"label":"PEA-PME","regle":"Même fiscalité que le PEA. Plafond commun PEA + PEA-PME : 225 000 € de versements (dont 150 000 € au plus sur le PEA). Aucun ETF éligible au PEA-PME depuis 2022.","anciennete_exoneration_ans":5,"taux_avant_5_ans":31.4,"taux_apres_5_ans":18.6,"plafond_commun_eur":225000,"source":"https://www.service-public.gouv.fr/particuliers/vosdroits/F2385","statut":"V"},"PEA_jeune":{"label":"PEA « jeune »","regle":"Majeur rattaché au foyer fiscal de ses parents (jusqu'à 25 ans) : plafond de 20 000 €.","plafond_versements_eur":20000,"source":"https://www.service-public.gouv.fr/particuliers/vosdroits/F2385","statut":"V"},"assurance_vie":{"label":"Assurance-vie","regle":"Gains taxés seulement au rachat. Avant 8 ans : PFU. Après 8 ans : abattement annuel (4 600 € / 9 200 € pour un couple) puis taux réduit d'impôt sur le revenu selon les versements ; prélèvements sociaux 17,2 % (exclue de la hausse 2026).","anciennete_avantage_ans":8,"abattement_annuel_eur":4600,"abattement_couple_eur":9200,"statut":"A"},"crypto_wallet":{"label":"Crypto-actifs","regle":"Seules les cessions contre de la monnaie ayant cours légal (ou un bien/service) sont imposables, selon une formule de portefeuille globale (art. 150 VH bis du CGI) ; un échange crypto contre crypto n'est pas imposable. PFU 31,4 % ; exonération si le total des cessions de l'année ne dépasse pas 305 €.","taux_global":31.4,"seuil_exoneration_cessions_eur":305,"statut":"A"},"bank_account":{"label":"Compte bancaire","regle":"Intérêts éventuels soumis au PFU (hors livrets réglementés).","statut":"A"}}}};
+function data(k){var v=Object.prototype.hasOwnProperty.call(CK.DATA,k)?CK.DATA[k]:null;return v&&typeof v==="object"?v:null;}
+
+/** Phrase exacte imposée, affichée partout (accueil compris). */
+var DISCLAIMER="Les informations affichées ne constituent pas un conseil en investissement personnalisé. Les performances passées ne préjugent pas des performances futures.";
+CK.DISCLAIMER=DISCLAIMER;
+
+/* ---------- Classes d'exposition : arbre parent → enfants ----------
+   Une classe n'est autorisée que si elle ET tous ses parents sont cochés. */
+/** @typedef {"actions"|"obligations"|"oblig_etat"|"oblig_entreprise"|"matieres_premieres"|"or"|"argent"|"energie"|"petrole"|"gaz"|"agricole"|"immobilier_cote"|"crypto"|"stablecoin"|"liquidites"|"devises"} AssetClass */
+var CLASSES=[
+  {id:"actions",label:"Actions",parent:null},
+  {id:"obligations",label:"Obligations",parent:null},
+  {id:"oblig_etat",label:"Obligations d'État",parent:"obligations"},
+  {id:"oblig_entreprise",label:"Obligations d'entreprise",parent:"obligations"},
+  {id:"matieres_premieres",label:"Matières premières",parent:null},
+  {id:"or",label:"Or",parent:"matieres_premieres"},
+  {id:"argent",label:"Argent",parent:"matieres_premieres"},
+  {id:"energie",label:"Énergie",parent:"matieres_premieres"},
+  {id:"petrole",label:"Pétrole",parent:"energie"},
+  {id:"gaz",label:"Gaz naturel",parent:"energie"},
+  {id:"agricole",label:"Matières premières agricoles",parent:"matieres_premieres"},
+  {id:"immobilier_cote",label:"Immobilier coté (REIT, SIIC)",parent:null},
+  {id:"crypto",label:"Crypto",parent:null},
+  {id:"stablecoin",label:"Stablecoins",parent:"crypto"},
+  {id:"liquidites",label:"Liquidités",parent:null},
+  {id:"devises",label:"Devises",parent:null}
+];
+/* Tables sans prototype : "toString", "constructor"… ne sont jamais pris pour une classe, un véhicule ou un instrument. */
+var dict=function(){return Object.create(null);};
+var CL=dict();CLASSES.forEach(function(c){CL[c.id]=c;});
+/** Identifiant de classe connu (chaîne exacte) ou null : ["or"] ou {toString…} ne passent jamais pour "or". */
+function clsId(v){return typeof v==="string"&&CL[v]?v:null;}
+function classAncestors(id){var out=[],c=CL[clsId(id)],guard=0;while(c&&c.parent&&guard++<10){out.push(c.parent);c=CL[c.parent];}return out;}
+function classChildren(id){return CLASSES.filter(function(c){return c.parent===id;}).map(function(c){return c.id;});}
+/** Vrai si la classe et tous ses parents sont cochés dans `checked` ({classe:true}). */
+function isClassAllowed(id,checked){if(!clsId(id)||!checked||checked[id]!==true)return false;return classAncestors(id).every(function(p){return checked[p]===true;});}
+
+/* ---------- Véhicules ---------- */
+/** @typedef {"titre"|"etf"|"etc_etn"|"fonds"|"spot_crypto"|"cash"|"indice"|"taux"} Vehicle */
+var VEHICLES=[
+  {id:"titre",label:"Titres en direct (actions)",investable:true},
+  {id:"etf",label:"ETF",investable:true},
+  {id:"etc_etn",label:"ETC / ETN",investable:true},
+  {id:"fonds",label:"Fonds (OPCVM, UC)",investable:true},
+  {id:"spot_crypto",label:"Crypto au comptant",investable:true},
+  {id:"cash",label:"Liquidités",investable:true},
+  {id:"indice",label:"Indice (non investissable)",investable:false},
+  {id:"taux",label:"Taux (non investissable)",investable:false}
+];
+var VH=dict();VEHICLES.forEach(function(v){VH[v.id]=v;});
+
+/* ---------- Autres énumérations ---------- */
+var PEA_STATUS={eligible:"Éligible PEA",eligible_regle:"Éligible PEA (règle, à confirmer chez ton courtier)",not_eligible:"Non éligible PEA",unknown:"Éligibilité à vérifier"};
+var PEA_PME_STATUS={eligible:"Éligible PEA-PME",eligible_regle:"Éligible PEA-PME (règle, à confirmer)",not_eligible:"Non éligible PEA-PME",unknown:"Éligibilité PEA-PME à vérifier"};
+var ACCOUNT_TYPES=[
+  {id:"PEA",label:"PEA"},{id:"PEA_PME",label:"PEA-PME"},{id:"CTO",label:"Compte-titres (CTO)"},
+  {id:"assurance_vie",label:"Assurance-vie"},{id:"crypto_wallet",label:"Portefeuille crypto"},
+  {id:"bank_account",label:"Compte bancaire"},{id:"other",label:"Autre"}
+];
+var REGIONS=[{id:"france",label:"France"},{id:"europe",label:"Europe"},{id:"etats_unis",label:"États-Unis"},{id:"monde",label:"Monde"},
+  {id:"emergents",label:"Émergents"},{id:"japon",label:"Japon"},{id:"asie",label:"Asie"},{id:"autre",label:"Autre"}];
+var RISK_PROFILES=[{id:"prudent",label:"Prudent"},{id:"modere",label:"Modéré"},{id:"dynamique",label:"Dynamique"},{id:"agressif",label:"Agressif"}];
+var HORIZONS=[{id:"court",label:"Court terme"},{id:"moyen",label:"Moyen terme"},{id:"long",label:"Long terme"}];
+var GRANULARITIES=["1d","1w","1M","snapshot"];
+var SOURCE_STATES={connectee:"Connectée",degradee:"Dégradée",hors_ligne:"Hors ligne",obsolete:"Données obsolètes"};
+var idsOf=function(a){return a.map(function(x){return x.id;});};
+var ACC_IDS=idsOf(ACCOUNT_TYPES),REG_IDS=idsOf(REGIONS),RISK_IDS=idsOf(RISK_PROFILES),HOR_IDS=idsOf(HORIZONS);
+
+/* ---------- Nettoyage des textes et nombres venus de l'extérieur ---------- */
+/** Retire balises HTML (y compris une balise non refermée en fin de texte), caractères de contrôle (C0, C1) et marques
+    de sens d'écriture (U+202A-202E, U+2066-2069), compacte les espaces, coupe à `max` caractères.
+    « 1 < 3 » est conservé (un < suivi d'un espace ou d'un chiffre n'ouvre pas de balise). Le résultat reste à passer par esc() à l'affichage. */
+function cleanText(s,max){
+  if(typeof s!=="string"){if(typeof s!=="number"&&typeof s!=="boolean")return "";s=String(s);}   // objet, tableau → "" (String({toString:1}) lèverait)
+  // Une balise commence par « < » suivi d'une lettre, « ! », « / » ou « ? » et va jusqu'au « > » (ou la fin) : « <3 % et >2 % » reste intact.
+  // Remplacée par une espace, elle ne peut pas recoller un « < » à une lettre (« <</p>img » → « < img »).
+  var t=s.replace(/<[A-Za-z!\/?][^>]*(>|$)/g," ").replace(/&nbsp;/gi," ")
+    .replace(/[\u0000-\u001F\u007F-\u009F\u061C\u200B\u200E\u200F\u202A-\u202E\u2066-\u2069]/g," ").replace(/\s+/g," ").trim();
+  max=max||200;if(t.length>max){t=t.slice(0,max);if(/[\uD800-\uDBFF]$/.test(t))t=t.slice(0,-1);}   // jamais de demi-emoji
+  return t;
+}
+/** Nombre fini ou null. Accepte "1 234,5" (format français), "1.234,5", "1.234.567" et "1,234.5".
+    Un seul point sans virgule ("0.125", "1.500") est un séparateur décimal, jamais un séparateur de milliers.
+    Le signe moins typographique (U+2212) vaut « - ». Chaîne vide ou blanche, "NaN", "Infinity", hexadécimal,
+    tout ce qui n'est ni nombre ni chaîne (tableau [1,2], objet, booléen) → null. */
+function num(v){
+  if(typeof v==="number")return isFinite(v)?v:null;if(typeof v!=="string")return null;
+  var s=v.replace(/\s/g,"").replace(/^\u2212/,"-");   // \s couvre aussi les espaces insécables (U+00A0, U+202F)
+  if(!s)return null;
+  if(/^-?\d{1,3}(\.\d{3})+,\d+$/.test(s)||/^-?[1-9]\d{0,2}(\.\d{3}){2,}$/.test(s))s=s.replace(/\./g,"").replace(",",".");
+  else if(/^-?\d+(,\d+)$/.test(s))s=s.replace(",",".");
+  else s=s.replace(/,(?=\d{3}(\D|$))/g,"");
+  if(!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s))return null;
+  var n=Number(s);return isFinite(n)?n:null;
+}
+/** Date "AAAA-MM-JJ" ou null. Nombre (ms) → jour UTC. "AAAA-MM-JJ…" → ce jour-là tel quel (même avec une heure et un décalage).
+    "JJ/MM/AAAA" ou "JJ.MM.AAAA" → format français (jamais lu à l'américaine). Jour inexistant (30 février) → null.
+    Autre texte : parseur de l'hôte, jour UTC si un fuseau est écrit, sinon jour local (pas de recul d'un jour à Paris). */
+function ymd(y,m,d){var dim=[31,y%4===0&&(y%100!==0||y%400===0)?29:28,31,30,31,30,31,31,30,31,30,31];
+  return m>=1&&m<=12&&d>=1&&d<=dim[m-1]?y+"-"+(m<10?"0":"")+m+"-"+(d<10?"0":"")+d:null;}
+function isoDate(v){
+  if(Object.prototype.toString.call(v)==="[object Date]")v=v.getTime();
+  if(typeof v==="number"){if(!isFinite(v))return null;var u=new Date(v);return isNaN(u.getTime())?null:u.toISOString().slice(0,10);}
+  if(typeof v!=="string")return null;
+  var s=v.trim(),m=/^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/.exec(s);if(m)return ymd(+m[1],+m[2],+m[3]);
+  m=/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})$/.exec(s);if(m)return ymd(+m[3],+m[2],+m[1]);
+  var d=new Date(s);if(isNaN(d.getTime()))return null;
+  return /(Z|GMT|UTC|[+-]\d{2}:?\d{2})$/i.test(s)?d.toISOString().slice(0,10):ymd(d.getFullYear(),d.getMonth()+1,d.getDate());
+}
+function pick(v,allowed,def){return allowed.indexOf(v)>=0?v:def;}
+function upper(s,max){return cleanText(s,max||40).toUpperCase();}
+var ISIN_RE=/^[A-Z]{2}[A-Z0-9]{9}\d$/;
+/** Contrôle de la clé ISIN (algorithme de Luhn sur les chiffres convertis). */
+function isinValid(isin){
+  if(typeof isin!=="string"||!ISIN_RE.test(isin))return false;
+  var digits=isin.split("").map(function(ch){return /[A-Z]/.test(ch)?String(ch.charCodeAt(0)-55):ch;}).join("");
+  var sum=0,dbl=false;for(var i=digits.length-1;i>=0;i--){var d=+digits[i];if(dbl){d*=2;if(d>9)d-=9;}sum+=d;dbl=!dbl;}return sum%10===0;
+}
+var BAD_KEYS=dict();["__proto__","constructor","prototype"].forEach(function(k){BAD_KEYS[k]=1;});
+/** Copie un objet en ne gardant que les clés autorisées (jamais __proto__/constructor/prototype). */
+function only(obj,keys){var o={};if(!obj||typeof obj!=="object")return o;keys.forEach(function(k){if(!BAD_KEYS[k]&&Object.prototype.hasOwnProperty.call(obj,k))o[k]=obj[k];});return o;}
+/** Vrai si un objet (ou un de ses enfants, à toute profondeur) contient une clé dangereuse. Parcours itératif, sûr sur les cycles. */
+function hasBadKeys(v){var st=[v],seen=new Set();
+  while(st.length){var x=st.pop();if(!x||typeof x!=="object"||seen.has(x))continue;seen.add(x);
+    var ks=Object.getOwnPropertyNames(x);for(var i=0;i<ks.length;i++){if(BAD_KEYS[ks[i]])return true;st.push(x[ks[i]]);}}return false;}
+/** JSON.parse qui refuse les clés dangereuses. Renvoie {ok, value, error}. */
+function safeJSON(text){try{var v=JSON.parse(String(text));if(hasBadKeys(v))return {ok:false,error:"Clé interdite dans le fichier (__proto__, constructor ou prototype)."};return {ok:true,value:v};}catch(e){return {ok:false,error:"Fichier JSON illisible."};}}
+
+/* ---------- Modèles ---------- */
+/**
+ * @typedef {Object} Instrument
+ * @property {string} id                 identifiant stable : "isin:LU1681043599", "crypto:BTC", "tv:TVC:GOLD"
+ * @property {string} symbol             mnémonique affiché (CW8, BTC, GOLD)
+ * @property {string} name
+ * @property {string|null} isin
+ * @property {AssetClass} asset_class    classe d'exposition
+ * @property {string|null} sub_asset_class  précision libre (ex. "monde", "nasdaq100", "ETC physique")
+ * @property {Vehicle} vehicle
+ * @property {string|null} exchange      place de cotation (EURONEXT, XETR, NASDAQ…)
+ * @property {string|null} mic           code MIC (XPAR, XAMS…)
+ * @property {string|null} currency      devise de cotation (EUR, USD, GBX…)
+ * @property {string|null} country       pays de l'émetteur (ou du domicile pour un fonds, cf. domicile)
+ * @property {string|null} domicile      pays de domicile d'un fonds (≠ région d'exposition)
+ * @property {string|null} sector        secteur (actions, ETF sectoriels) ; "diversifie" pour un ETF large
+ * @property {string|null} region        zone d'EXPOSITION (france, europe, etats_unis, monde, emergents…)
+ * @property {boolean|null} pea_eligible
+ * @property {"eligible"|"eligible_regle"|"not_eligible"|"unknown"} pea_eligibility_status
+ * @property {string|null} pea_source
+ * @property {string|null} pea_last_checked_at   AAAA-MM-JJ
+ * @property {"eligible"|"eligible_regle"|"not_eligible"|"unknown"} pea_pme_status
+ * @property {string|null} alt_group     groupe d'instruments équivalents (sp500, msci_world…)
+ * @property {number|null} ter           frais courants annuels en % (0,38 = 0,38 %)
+ * @property {number|null} risk_level    SRI 1-7 du DIC
+ * @property {number} leverage           1 = sans levier ; 2 = ×2 ; -1 = inverse
+ * @property {string|null} launch_date
+ * @property {string|null} delisted_at
+ * @property {boolean} siic              foncière SIIC / REIT (exclue du PEA)
+ * @property {boolean} preferred         action de préférence (exclue du PEA)
+ * @property {{tv?:string,yahoo?:string,okx?:string,euronext?:string,binance?:string}} tickers
+ * @property {string} data_source        provider principal : tvscan, crypto…
+ * @property {boolean} is_active
+ * @property {boolean} is_investable
+ */
+var INSTR_KEYS=["id","symbol","name","isin","asset_class","sub_asset_class","vehicle","exchange","mic","currency","country","domicile","sector","region",
+  "pea_eligible","pea_eligibility_status","pea_source","pea_last_checked_at","pea_pme_status","pea_pme_source","alt_group","ter","risk_level","leverage",
+  "launch_date","delisted_at","siic","preferred","tickers","data_source","is_active","is_investable","market_cap_eur","notes"];
+var STATUS_IDS=["eligible","eligible_regle","not_eligible","unknown"];
+/** @returns {Instrument} */
+function normInstrument(raw){
+  // ISIN : espaces et tirets retirés, puis 12 caractères exactement (jamais tronqué : "FR00001202711" n'est pas "FR0000120271").
+  var r=only(raw||{},INSTR_KEYS),isin=upper(r.isin,40).replace(/[ -]/g,"")||null;if(isin&&!ISIN_RE.test(isin))isin=null;
+  var vehicle=pick(r.vehicle,Object.keys(VH),"titre"),cls=clsId(r.asset_class)||"actions";
+  // Code pays ISO à 2 lettres, sinon null : « Allemagne » ne devient pas « AL » (Albanie).
+  var cc=function(v){v=upper(v,10);return /^[A-Z]{2}$/.test(v)?v:null;},mic=upper(r.mic,10);
+  var t=r.tickers&&typeof r.tickers==="object"?only(r.tickers,["tv","yahoo","okx","euronext","binance"]):{};
+  Object.keys(t).forEach(function(k){t[k]=cleanText(t[k],40)||undefined;if(!t[k])delete t[k];});
+  var pst=pick(r.pea_eligibility_status,STATUS_IDS,"unknown");
+  var o={
+    id:cleanText(r.id,64)||(isin?"isin:"+isin:t.tv?"tv:"+t.tv:"x:"+cleanText(r.symbol,20)),
+    symbol:upper(r.symbol,20),name:cleanText(r.name,120),isin:isin,
+    asset_class:cls,sub_asset_class:cleanText(r.sub_asset_class,60)||null,vehicle:vehicle,
+    exchange:upper(r.exchange,20)||null,mic:/^[A-Z0-9]{4}$/.test(mic)?mic:null,currency:upper(r.currency,4)||null,
+    country:cc(r.country),domicile:cc(r.domicile),sector:cleanText(r.sector,60)||null,
+    region:REG_IDS.indexOf(r.region)>=0?r.region:null,
+    pea_eligible:pst==="eligible"||pst==="eligible_regle"?true:pst==="not_eligible"?false:null,
+    pea_eligibility_status:pst,pea_source:cleanText(r.pea_source,200)||null,pea_last_checked_at:isoDate(r.pea_last_checked_at),
+    pea_pme_status:pick(r.pea_pme_status,STATUS_IDS,"unknown"),pea_pme_source:cleanText(r.pea_pme_source,200)||null,
+    alt_group:cleanText(r.alt_group,40)||null,ter:num(r.ter),risk_level:(function(x){x=num(x);return x>=1&&x<=7?Math.round(x):null;})(r.risk_level),
+    leverage:num(r.leverage)||1,launch_date:isoDate(r.launch_date),delisted_at:isoDate(r.delisted_at),
+    siic:r.siic===true,preferred:r.preferred===true,tickers:t,data_source:cleanText(r.data_source,20)||(cls==="crypto"||cls==="stablecoin"?"crypto":"tvscan"),
+    is_active:r.is_active!==false,is_investable:VH[vehicle].investable&&(r.is_investable==null||r.is_investable===true),   // un indice ou un taux n'est jamais investissable
+    market_cap_eur:num(r.market_cap_eur),notes:cleanText(r.notes,300)||null
+  };
+  return o;
+}
+/**
+ * @typedef {Object} PriceBar
+ * @property {string} instrument_id
+ * @property {number} timestamp   ms UTC (clôture de la barre)
+ * @property {number} open @property {number} high @property {number} low @property {number} close
+ * @property {number|null} volume
+ * @property {string|null} currency
+ * @property {string} source
+ * @property {"1d"|"1w"|"1M"|"snapshot"} granularity
+ */
+function normBar(raw,instrument_id,ccy,source,gran){
+  var r=raw||{},ts=num(r.timestamp!=null?r.timestamp:r.t),c=num(r.close!=null?r.close:r.c);
+  if(ts==null||c==null||c<=0)return null;
+  var o=num(r.open!=null?r.open:r.o),h=num(r.high!=null?r.high:r.h),l=num(r.low!=null?r.low:r.l);
+  o=o>0?o:c;h=h>0?h:Math.max(o,c);l=l>0?l:Math.min(o,c);
+  if(h<Math.max(o,c))h=Math.max(o,c);if(l>Math.min(o,c))l=Math.min(o,c);
+  return {instrument_id:instrument_id||cleanText(r.instrument_id,64)||null,timestamp:ts,open:o,high:h,low:l,close:c,volume:num(r.volume!=null?r.volume:r.v),
+    currency:ccy||upper(r.currency,4)||null,source:source||cleanText(r.source,40),granularity:pick(gran||r.granularity,GRANULARITIES,"1d")};
+}
+/**
+ * Cotation instantanée (affichage seulement : jamais utilisée par le moteur d'allocation ni le backtest).
+ * @typedef {Object} Quote
+ * @property {string} instrument_id @property {number|null} last @property {number|null} prev_close
+ * @property {number|null} open @property {number|null} high @property {number|null} low
+ * @property {number|null} volume @property {number|null} value_traded @property {number|null} change_pct
+ * @property {{w:number|null,m1:number|null,m3:number|null,m6:number|null,y1:number|null,ytd:number|null}} perf
+ * @property {string|null} currency @property {number} ts @property {number|null} delay_s
+ * @property {string} source @property {boolean} stale
+ */
+function normQuote(raw){
+  var r=raw||{},p=r.perf||{};
+  return {instrument_id:cleanText(r.instrument_id,64)||null,last:num(r.last),prev_close:num(r.prev_close),open:num(r.open),high:num(r.high),low:num(r.low),
+    volume:num(r.volume),value_traded:num(r.value_traded),change_pct:num(r.change_pct),
+    perf:{w:num(p.w),m1:num(p.m1),m3:num(p.m3),m6:num(p.m6),y1:num(p.y1),ytd:num(p.ytd)},
+    currency:upper(r.currency,4)||null,ts:num(r.ts)||0,delay_s:num(r.delay_s),source:cleanText(r.source,40),stale:r.stale===true,src:"scan"};
+}
+/**
+ * @typedef {Object} Account
+ * @property {string} id @property {string} name
+ * @property {"PEA"|"PEA_PME"|"CTO"|"assurance_vie"|"crypto_wallet"|"bank_account"|"other"} account_type
+ * @property {string} currency @property {number} cash_balance @property {number|null} total_value_eur
+ * @property {string|null} broker @property {boolean} is_active
+ * @property {string|null} opened_at      AAAA-MM-JJ (ancienneté PEA 5 ans, assurance-vie 8 ans)
+ * @property {number|null} deposits_total versements cumulés (plafond PEA)
+ */
+function normAccount(raw){
+  var r=only(raw||{},["id","name","account_type","currency","cash_balance","total_value_eur","broker","is_active","opened_at","deposits_total","manual_universe"]);
+  return {id:cleanText(r.id,40)||null,name:cleanText(r.name,60)||"Compte",account_type:pick(r.account_type,ACC_IDS,"other"),
+    currency:upper(r.currency,4)||"EUR",cash_balance:num(r.cash_balance)||0,total_value_eur:num(r.total_value_eur),broker:cleanText(r.broker,60)||null,
+    is_active:r.is_active!==false,opened_at:isoDate(r.opened_at),deposits_total:num(r.deposits_total),
+    manual_universe:Array.isArray(r.manual_universe)?r.manual_universe.slice(0,200).map(function(x){return cleanText(x,64);}).filter(Boolean):[]};
+}
+/**
+ * @typedef {Object} Position
+ * @property {string} account_id @property {string} instrument_id @property {number} quantity
+ * @property {number|null} average_purchase_price @property {number|null} current_price
+ * @property {number|null} market_value_eur @property {number|null} unrealized_pnl @property {number|null} realized_pnl
+ * @property {AssetClass|null} asset_class @property {string|null} currency
+ * @property {"PEA"|"PEA_PME"|"CTO"|"assurance_vie"|"crypto_wallet"|"bank_account"|"other"|null} account_type
+ * @property {string|null} updated_at
+ * @property {number|null} fx_rate_at_purchase  EUR pour 1 unité de la devise d'achat
+ * @property {"marche"|"manuel"} price_source
+ */
+function normPosition(raw){
+  var r=only(raw||{},["account_id","instrument_id","quantity","average_purchase_price","current_price","market_value_eur","unrealized_pnl","realized_pnl",
+    "asset_class","currency","account_type","updated_at","fx_rate_at_purchase","price_source","manual_price"]);
+  return {account_id:cleanText(r.account_id,40)||null,instrument_id:cleanText(r.instrument_id,64)||null,quantity:num(r.quantity)||0,
+    average_purchase_price:num(r.average_purchase_price),current_price:num(r.current_price),market_value_eur:num(r.market_value_eur),
+    unrealized_pnl:num(r.unrealized_pnl),realized_pnl:num(r.realized_pnl),asset_class:clsId(r.asset_class),
+    currency:upper(r.currency,4)||null,account_type:ACC_IDS.indexOf(r.account_type)>=0?r.account_type:null,updated_at:isoDate(r.updated_at),
+    fx_rate_at_purchase:num(r.fx_rate_at_purchase),price_source:r.price_source==="manuel"?"manuel":"marche",manual_price:num(r.manual_price)};
+}
+/** @typedef {Object} Transaction  achat, vente, dividende, versement, retrait, frais */
+var TX_TYPES=["achat","vente","dividende","versement","retrait","frais"];
+function normTransaction(raw){
+  var r=only(raw||{},["id","account_id","instrument_id","date","type","quantity","price","fees","currency","fx_rate"]);
+  return {id:cleanText(r.id,40)||null,account_id:cleanText(r.account_id,40)||null,instrument_id:cleanText(r.instrument_id,64)||null,
+    date:isoDate(r.date),type:pick(r.type,TX_TYPES,"achat"),quantity:num(r.quantity)||0,price:num(r.price),fees:num(r.fees)||0,
+    currency:upper(r.currency,4)||"EUR",fx_rate:num(r.fx_rate)};
+}
+/**
+ * Préférences d'investissement. Tant que `saved` est faux, aucune proposition n'est calculée.
+ * @typedef {Object} InvestmentPrefs
+ */
+function defaultPrefs(){
+  var classes={};CLASSES.forEach(function(c){classes[c.id]=false;});
+  var vehicles={};VEHICLES.forEach(function(v){if(v.investable)vehicles[v.id]=false;});
+  return {v:1,saved:false,classes:classes,vehicles:vehicles,pea_mode:"off",pea_filter:"tous",risk_profile:"modere",horizon:"long",
+    monthly_contribution_eur:0,contribution_split:{},
+    limits:{max_par_classe:{},max_par_instrument:20,max_crypto:10,min_liquidites:0,max_turnover_mensuel:20,bande_inaction_pp:2,risque_max_sri:null,levier_autorise:false},
+    filters:{regions:[],devises:[],secteurs:[]},fiscal:{pfu_par_defaut:true,tmi:null}};
+}
+function pct(v,lo,hi,def){v=num(v);return v==null?def:Math.min(hi,Math.max(lo,v));}
+function normPrefs(raw){
+  var d=defaultPrefs(),r=raw&&typeof raw==="object"&&!hasBadKeys(raw)?raw:{};
+  var classes={};CLASSES.forEach(function(c){classes[c.id]=!!(r.classes&&r.classes[c.id]===true);});
+  var vehicles={};Object.keys(d.vehicles).forEach(function(k){vehicles[k]=!!(r.vehicles&&r.vehicles[k]===true);});
+  var L=r.limits||{},mpc={};Object.keys(L.max_par_classe||{}).forEach(function(k){if(CL[k])mpc[k]=pct(L.max_par_classe[k],0,100,100);});
+  var arr=function(a,ok){return Array.isArray(a)?a.filter(function(x){return ok(x);}).slice(0,50):[];};
+  var cs=r.contribution_split,split={};   // objet {compte: %} seulement (pas une chaîne ni un tableau), 50 comptes au plus
+  if(cs&&typeof cs==="object"&&!Array.isArray(cs))Object.keys(cs).slice(0,50).forEach(function(k){var kk=cleanText(k,40);if(kk&&!BAD_KEYS[kk])split[kk]=pct(cs[k],0,100,0);});
+  return {v:1,saved:r.saved===true,classes:classes,vehicles:vehicles,
+    pea_mode:pick(r.pea_mode,["off","prioritaire","strict"],d.pea_mode),pea_filter:pick(r.pea_filter,["tous","eligibles","eligibles_a_verifier"],d.pea_filter),
+    risk_profile:pick(r.risk_profile,RISK_IDS,d.risk_profile),horizon:pick(r.horizon,HOR_IDS,d.horizon),
+    monthly_contribution_eur:Math.max(0,num(r.monthly_contribution_eur)||0),contribution_split:split,
+    limits:{max_par_classe:mpc,max_par_instrument:pct(L.max_par_instrument,1,100,d.limits.max_par_instrument),max_crypto:pct(L.max_crypto,0,100,d.limits.max_crypto),
+      min_liquidites:pct(L.min_liquidites,0,100,0),max_turnover_mensuel:pct(L.max_turnover_mensuel,0,100,d.limits.max_turnover_mensuel),
+      bande_inaction_pp:pct(L.bande_inaction_pp,0,20,d.limits.bande_inaction_pp),risque_max_sri:(function(x){x=num(x);return x>=1&&x<=7?Math.round(x):null;})(L.risque_max_sri),
+      levier_autorise:L.levier_autorise===true},
+    filters:{regions:arr((r.filters||{}).regions,function(x){return REG_IDS.indexOf(x)>=0;}),devises:arr((r.filters||{}).devises,function(x){return typeof x==="string"&&/^[A-Z]{3}$/.test(x);}),
+      secteurs:arr((r.filters||{}).secteurs,function(x){return typeof x==="string"&&x.length<60;}).map(function(x){return cleanText(x,60);})},
+    fiscal:{pfu_par_defaut:(r.fiscal||{}).pfu_par_defaut!==false,tmi:pct((r.fiscal||{}).tmi,0,45,null)}};
+}
+
+/* ---------- Garde-fou unique : un instrument hors des classes ou véhicules cochés n'est JAMAIS proposé ----------
+   Utilisé par l'allocation, la sélection, le screener mensuel, les alternatives et le backtest.
+   Renvoie true/false ; CK.allow.why(instr, prefs) donne le motif en français. */
+function allowWhy(instr,prefs){
+  if(!instr)return "Instrument inconnu.";
+  // Le véhicule est relu dans la table : un objet brut {vehicle:"indice", is_investable:true} reste refusé.
+  var vh=typeof instr.vehicle==="string"?VH[instr.vehicle]:null;
+  if(instr.is_investable!==true||(vh&&!vh.investable))return "Non investissable (indice ou taux).";
+  if(instr.is_active===false)return "Instrument inactif.";
+  if(!prefs||!prefs.classes||!prefs.vehicles)return "Préférences absentes.";
+  if(!isClassAllowed(instr.asset_class,prefs.classes)){var p=classAncestors(instr.asset_class).filter(function(x){return prefs.classes[x]!==true;});
+    return "Hors de tes classes : "+(CL[instr.asset_class]?CL[instr.asset_class].label:instr.asset_class)+(p.length?" (classe parente non cochée : "+p.map(function(x){return CL[x].label;}).join(", ")+")":"")+".";}
+  if(!vh)return "Type de produit inconnu.";
+  if(prefs.vehicles[instr.vehicle]!==true)return "Type non coché : "+vh.label+".";
+  if(!(prefs.limits&&prefs.limits.levier_autorise===true)&&instr.leverage!=null&&instr.leverage!==1)return "Produit à levier ou inverse non autorisé.";
+  // Comparaison numérique (des chaînes "10" > "4" seraient comparées comme du texte)
+  var sri=num(prefs.limits&&prefs.limits.risque_max_sri),rl=num(instr.risk_level);if(sri&&rl&&rl>sri)return "Niveau de risque "+rl+"/7 au-dessus de ton maximum ("+sri+"/7).";
+  return "";
+}
+function allow(instr,prefs){return allowWhy(instr,prefs)==="";}
+allow.why=allowWhy;
+CK.allow=allow;
+
+/* ---------- Référentiel des instruments (referentiel.json) ---------- */
+/* BY : identifiants propres ; AL : alias "isin:…" et "tv:…". Séparés pour qu'un alias (ISIN partagé par deux cotations)
+   ne fasse jamais prendre pour un doublon l'instrument dont c'est l'identifiant réel. */
+var REF=null,BY=dict(),AL=dict();
+function refLoad(list){
+  REF=[];BY=dict();AL=dict();(Array.isArray(list)?list:[]).forEach(function(raw){var i=normInstrument(raw);if(BY[i.id])return;REF.push(i);BY[i.id]=i;
+    if(i.isin&&!AL["isin:"+i.isin])AL["isin:"+i.isin]=i;if(i.tickers.tv&&!AL["tv:"+i.tickers.tv])AL["tv:"+i.tickers.tv]=i;});
+  return REF;
+}
+function refKey(k){refAll();return BY[k]||AL[k]||null;}
+function refAll(){if(!REF){var d=data("referentiel");refLoad(d&&d.instruments||[]);}return REF;}
+var norm=function(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");};
+CK.ref={
+  load:refLoad,
+  all:refAll,
+  get:function(id){return typeof id==="string"?refKey(id):null;},
+  byIsin:function(isin){return typeof isin==="string"?refKey("isin:"+isin.trim().toUpperCase()):null;},
+  byTv:function(sym){return typeof sym==="string"?refKey("tv:"+sym):null;},
+  /** Recherche texte (nom, symbole, ISIN) + filtres {asset_class, vehicle, region, currency, investable}. */
+  search:function(q,f){q=norm(q);f=f||{};return refAll().filter(function(i){
+    if(f.asset_class&&i.asset_class!==f.asset_class&&classAncestors(i.asset_class).indexOf(f.asset_class)<0)return false;
+    if(f.vehicle&&i.vehicle!==f.vehicle)return false;if(f.region&&i.region!==f.region)return false;if(f.currency&&i.currency!==f.currency)return false;
+    if(f.investable!=null&&i.is_investable!==f.investable)return false;
+    return !q||norm(i.name).indexOf(q)>=0||norm(i.symbol).indexOf(q)>=0||norm(i.isin).indexOf(q)>=0;});}
+};
+
+/* ---------- Validation (pour l'import et les tests) ---------- */
+function validateInstrument(i){var e=[];if(!i||typeof i!=="object")return {ok:false,errors:["instrument absent"]};
+  var t=i.tickers&&typeof i.tickers==="object"?i.tickers:{};
+  if(!i.id)e.push("id manquant");if(!i.name)e.push("nom manquant");if(i.isin&&!isinValid(i.isin))e.push("ISIN invalide ("+cleanText(i.isin,20)+")");
+  if(!clsId(i.asset_class))e.push("classe inconnue");if(typeof i.vehicle!=="string"||!VH[i.vehicle])e.push("véhicule inconnu");
+  if(i.is_investable&&!t.tv&&!t.okx&&!t.binance&&!t.yahoo)e.push("aucun ticker pour obtenir un cours");return {ok:!e.length,errors:e};}
+
+CK.models={
+  CLASSES:CLASSES,VEHICLES:VEHICLES,PEA_STATUS:PEA_STATUS,PEA_PME_STATUS:PEA_PME_STATUS,ACCOUNT_TYPES:ACCOUNT_TYPES,REGIONS:REGIONS,
+  RISK_PROFILES:RISK_PROFILES,HORIZONS:HORIZONS,SOURCE_STATES:SOURCE_STATES,TX_TYPES:TX_TYPES,DISCLAIMER:DISCLAIMER,
+  classLabel:function(id){return CL[id]?CL[id].label:id;},vehicleLabel:function(id){return VH[id]?VH[id].label:id;},
+  classAncestors:classAncestors,classChildren:classChildren,isClassAllowed:isClassAllowed,
+  cleanText:cleanText,num:num,isoDate:isoDate,isinValid:isinValid,only:only,hasBadKeys:hasBadKeys,safeJSON:safeJSON,
+  normInstrument:normInstrument,normBar:normBar,normQuote:normQuote,normAccount:normAccount,normPosition:normPosition,normTransaction:normTransaction,
+  defaultPrefs:defaultPrefs,normPrefs:normPrefs,validateInstrument:validateInstrument,
+  data:data,setData:function(k,v){if(typeof k!=="string"||BAD_KEYS[k])return;CK.DATA[k]=v;if(k==="referentiel")REF=null;}
+};
+})();
+
+/* ================================================================
+   COCKPIT — Kit données (phase 1) : CK.dk
+   Réseau (limiteur à jetons, budget par minute, file à priorités, dédoublonnage, cache,
+   nouvels essais, disjoncteurs), WebSocket robuste, IndexedDB avec repli mémoire,
+   journal en anneau et statut de chaque source.
+   Rien ne démarre au chargement : tout passe par CK.dk.env, lu à chaque appel (remplaçable par les tests).
+   ================================================================ */
+(function(){
+"use strict";
+var CK=window.CK=window.CK||{};
+
+/* ---------- Environnement : valeurs par défaut = globals du navigateur, lus au moment de l'appel ---------- */
+var DEF={
+  fetch:function(u,o){return window.fetch(u,o);},
+  WebSocket:function(u){return new window.WebSocket(u);},
+  now:function(){return Date.now();},
+  random:function(){return Math.random();},
+  setTimeout:function(f,ms){return window.setTimeout(f,ms);},
+  clearTimeout:function(h){return window.clearTimeout(h);},
+  hidden:function(){return !!(window.document&&window.document.hidden);},
+  indexedDB:undefined, // undefined = window.indexedDB ; null = absent
+  online:function(){return !(window.navigator&&window.navigator.onLine===false);}
+};
+/** Lit une dépendance : CK.dk.env[k] si défini, sinon la valeur par défaut. */
+function E(k){var e=dk.env,v=e?e[k]:undefined;if(v!==undefined)return v;return k==="indexedDB"?window.indexedDB:DEF[k];}
+function now(){return +E("now")();}
+function later(f,ms){return E("setTimeout")(f,ms);}
+function cancel(h){if(h!=null)E("clearTimeout")(h);return null;}
+function sleep(ms){return new Promise(function(r){later(r,ms);});}
+function msgOf(e){return String(e&&e.message||e||"Erreur");}
+
+/* ---------- Journal : anneau de 500 entrées, plus récentes en dernier ---------- */
+var LOGS=[],LOGMAX=500,LEVELS=["info","warn","error"];
+function log(level,provider,msg,extra){
+  var e={ts:now(),level:LEVELS.indexOf(level)>=0?level:"info",provider:provider==null?null:String(provider),msg:String(msg==null?"":msg),extra:extra===undefined?null:extra};
+  LOGS.push(e);if(LOGS.length>LOGMAX)LOGS.splice(0,LOGS.length-LOGMAX);return e;
+}
+/** filtre : id de provider (chaîne), {provider, level, since} ou fonction. */
+function logs(f){
+  var out=LOGS.slice();if(!f)return out;if(typeof f==="function")return out.filter(f);if(typeof f==="string")f={provider:f};
+  return out.filter(function(e){return (!f.provider||e.provider===f.provider)&&(!f.level||e.level===f.level)&&(!f.since||e.ts>=f.since);});
+}
+
+/* ---------- Providers ---------- */
+var PDEF={label:"",rate:0,burst:0,budgetPerMin:0,pauseHidden:false,guard:[],guardMs:600000,timeout:12000,retries:3,staleMs:1800000,period:0};
+var P=Object.create(null);
+function prov(id,opts){
+  id=String(id);var p=P[id];
+  if(!p)p=P[id]={id:id,cfg:Object.assign({},PDEF,{label:id,guard:[]}),tokens:null,tsTok:0,stamps:[],q:[],timer:null,until:0,why:"",self:{},
+    st:{calls:0,errors:0,lastOk:0,lastErr:0,msg:"",last:"",dataTs:0,ttl:0}};
+  // Les réglages numériques sont convertis en nombres ("60000" + 1 ne doit pas donner "600001").
+  if(opts&&typeof opts==="object")Object.keys(PDEF).forEach(function(k){var v=opts[k];if(v===undefined)return;
+    p.cfg[k]=k==="guard"?[].concat(v).map(String):typeof PDEF[k]==="number"?(isFinite(+v)?+v:PDEF[k]):typeof PDEF[k]==="boolean"?!!v:String(v);});
+  return p;
+}
+function burstOf(c){return c.burst>0?c.burst:Math.max(1,Math.ceil(c.rate));}
+
+/* ---------- Limiteur : seau à jetons (rate/burst) + budget glissant sur 60 s ; les "high" passent avant les "low" ---------- */
+function waitMs(p){
+  var c=p.cfg,t=now(),w=0;
+  if(c.rate>0){var b=burstOf(c);if(p.tokens==null){p.tokens=b;p.tsTok=t;}
+    p.tokens=Math.min(b,p.tokens+Math.max(0,t-p.tsTok)*c.rate/1000);p.tsTok=t;
+    if(p.tokens<1-1e-9)w=Math.ceil((1-p.tokens)*1000/c.rate);}
+  if(c.budgetPerMin>0){while(p.stamps.length&&p.stamps[0]<=t-60000)p.stamps.shift();
+    if(p.stamps.length>=c.budgetPerMin)w=Math.max(w,p.stamps[0]+60000-t);}
+  return w;
+}
+function pump(p){
+  if(p.timer!=null)return;
+  while(p.q.length){
+    var w=waitMs(p);
+    if(w>0){p.timer=later(function(){p.timer=null;pump(p);},w);return;}
+    if(p.cfg.rate>0)p.tokens-=1;if(p.cfg.budgetPerMin>0)p.stamps.push(now());
+    var i=0;for(var j=0;j<p.q.length;j++)if(p.q[j].hi){i=j;break;}
+    p.q.splice(i,1)[0].go();
+  }
+}
+function slot(p,hi){return new Promise(function(go){p.q.push({hi:hi,go:go});pump(p);});}
+
+/* ---------- Disjoncteurs : guard (CK.NET) et pause propre après un 429 ----------
+   Le guard surveille les AUTRES modules (ex. le screener sur tvscan). Une erreur écrite dans CK.NET par ce provider
+   lui-même (CK.netErr reconnaît aussi ses URL) est ignorée : sinon un simple 5xx le mettrait en pause guardMs.
+   Ses propres 429 restent couverts par la pause propre. */
+function pauseOf(p){
+  var c=p.cfg,t=now(),until=p.until>t?p.until:0,why=until?p.why:"",N=CK.NET||{};
+  (c.guard||[]).forEach(function(id){var r=N[id];if(!r||!r.lastErr||p.self[id]===r.lastErr)return;var end=r.lastErr+c.guardMs;
+    if(end>t&&(r.code===429||r.lastErr>(r.lastOk||0))&&end>until){until=end;why="pause : "+id+" en difficulté";}});
+  return {until:until,why:why};
+}
+
+/* ---------- Cache mémoire et requêtes en vol ---------- */
+var C=new Map(),CMAX=500,INF=new Map();
+function cachePut(k,data){C.delete(k);C.set(k,{data:data,ts:now()});if(C.size>CMAX)C.delete(C.keys().next().value);}
+
+function err(msg,o){var e=new Error(msg);if(o)Object.keys(o).forEach(function(k){e[k]=o[k];});return e;}
+function retryAfter(r){
+  var h=r&&r.headers&&typeof r.headers.get==="function"?r.headers.get("retry-after"):null;if(h==null||h==="")return null;
+  h=String(h).trim();if(/^\d+(\.\d+)?$/.test(h))return Math.round(+h*1000);
+  var d=Date.parse(h);return isNaN(d)?null:Math.max(0,d-now());
+}
+/** Délai avant le nouvel essai k (0, 1, 2…) ; null = ne pas réessayer (Retry-After au-delà de 60 s). */
+function delayFor(e,k){
+  if(e.after!=null)return e.after>60000?null:e.after;
+  return Math.round(Math.min(30000,1000*Math.pow(2,k))*(0.5+E("random")()));
+}
+
+var ACCEPTED={};
+/** Un appel réseau : délai maximal, statut HTTP, lecture, validation, journal. */
+function once(p,url,o,init,tmo){
+  var st=p.st,AC=window.AbortController,ctl=AC?new AC():null,perf=window.performance,t0=perf&&perf.now?perf.now():0;
+  if(ctl)init=Object.assign({},init,{signal:ctl.signal});
+  st.calls++;
+  return new Promise(function(res,rej){
+    var done=false,tm=null,end=function(f,v){if(done)return;done=true;tm=cancel(tm);f(v);};
+    tm=later(function(){tm=null;if(done)return;try{if(ctl)ctl.abort();}catch(_){}end(rej,err("Délai dépassé",{retry:true,timeout:true}));},tmo);
+    var fp;try{fp=Promise.resolve(E("fetch")(url,init));}catch(e){fp=Promise.reject(e);}
+    fp.then(function(r){
+      // opts.accept : codes HTTP attendus (ex. [404] pour un fichier que le robot n'a pas) → réponse normale, données null, aucune erreur.
+      if(r&&!r.ok&&Array.isArray(o.accept)&&o.accept.indexOf(r.status|0)>=0)return ACCEPTED;
+      if(!r||!r.ok){var s=r?r.status|0:0;throw err("HTTP "+s,{status:s,retry:s===429||s>=500||s===0,after:retryAfter(r)});}
+      return Promise.resolve(o.parse==="text"?r.text():r.json()).then(null,function(){throw err("Réponse illisible",{retry:false});});
+    },function(e){throw err(msgOf(e),{retry:true,net:true});}).then(function(d){end(res,d);},function(e){end(rej,e);});
+  }).then(function(d){
+    if(d===ACCEPTED)return null; // code attendu : pas de validation
+    if(o.validate){var v;try{v=o.validate(d);}catch(e){v=msgOf(e);}
+      if(v!==true)throw err("Réponse invalide"+(typeof v==="string"&&v?" : "+v:""),{retry:false,invalid:true});}
+    return d;
+  }).then(function(d){
+    if(typeof CK.netOk==="function")try{CK.netOk(url,t0);}catch(_){}
+    return d;
+  },function(e){
+    st.errors++;st.lastErr=now();st.msg=e.message;
+    if(e.status===429){p.until=now()+Math.max(p.cfg.guardMs,e.after||0);p.why="pause : "+p.id+" en difficulté";log("warn",p.id,"trop de requêtes (429) : pause de "+Math.round((p.until-now())/60000)+" min",{until:p.until});}
+    if(typeof CK.netErr==="function")try{
+      var g=p.cfg.guard,N=CK.NET||{},b=g.map(function(id){return N[id]&&N[id].lastErr;});
+      CK.netErr(url,e);N=CK.NET||{};
+      g.forEach(function(id,i){var r=N[id];if(r&&r.lastErr&&r.lastErr!==b[i])p.self[id]=r.lastErr;}); // erreur écrite par nous
+    }catch(_){}
+    throw e;
+  });
+}
+
+/** Échec ou blocage : sert le cache (même expiré) en stale, sinon rejette. quiet = onglet caché (n'abîme pas le statut). */
+function fallback(p,key,e,quiet){
+  var hit=C.get(key);
+  if(hit){if(!quiet){p.st.last="stale";p.st.dataTs=hit.ts;}log(quiet?"info":"warn",p.id,"données en cache servies ("+e.message+")");
+    return Promise.resolve({data:hit.data,stale:true,ts:hit.ts,from:"cache"});}
+  if(!quiet)p.st.last="fail";log(quiet?"info":"error",p.id,e.message);
+  return Promise.reject(e);
+}
+
+/** Ne lève jamais : toute erreur synchrone (corps circulaire, environnement cassé…) devient un rejet. */
+function dkFetch(url,o){try{return run(url,o);}catch(e){return Promise.reject(e instanceof Error?e:new Error(msgOf(e)));}}
+function run(url,o){
+  o=o||{};
+  if(!o.provider)return Promise.reject(new Error("provider manquant"));
+  var p=prov(o.provider),c=p.cfg,method=String(o.method||"GET").toUpperCase(),
+    body=o.body==null?null:typeof o.body==="string"?o.body:JSON.stringify(o.body),
+    key=o.cacheKey||method+" "+url+(body!=null?" "+body:""),ttl=Math.max(0,+o.ttl||0),hi=o.priority==="high";
+  if(ttl)p.st.ttl=ttl;
+  var hit=C.get(key);
+  if(hit&&ttl&&now()-hit.ts<ttl)return Promise.resolve({data:hit.data,stale:false,ts:hit.ts,from:"cache"});
+  if(INF.has(key))return INF.get(key);
+  if(!hi&&c.pauseHidden&&E("hidden")())return fallback(p,key,new Error("onglet caché"),true);
+  var ps=pauseOf(p);if(ps.until)return fallback(p,key,new Error(ps.why),false);
+  if(!E("online")())return fallback(p,key,new Error("hors ligne"),false);
+  var init={method:method};if(o.headers)init.headers=o.headers;if(body!=null)init.body=body;
+  var max=Math.max(0,o.retries!=null?+o.retries:+c.retries||0),tmo=+o.timeout||+c.timeout||12000,k=0;
+  function attempt(){
+    // Après l'attente dans la file, les disjoncteurs sont revérifiés avant le PREMIER appel : un 429 reçu entre-temps
+    // retient les requêtes en attente. Les nouveaux essais d'une requête déjà partie ne sont pas retenus.
+    return slot(p,hi).then(function(){
+      if(!k){var ps=pauseOf(p);if(ps.until)throw err(ps.why,{retry:false,paused:true});}
+      return once(p,url,o,init,tmo);
+    }).then(null,function(e){
+      if(e.retry&&k<max&&E("online")()){var d=delayFor(e,k);
+        if(d!=null){k++;log("warn",p.id,"nouvel essai "+k+"/"+max+" dans "+Math.round(d/100)/10+" s ("+e.message+")",{url:url});return sleep(d).then(attempt);}}
+      throw e;
+    });
+  }
+  var pr=attempt().then(function(d){
+    var t=now();p.st.lastOk=t;p.st.last="ok";p.st.dataTs=t;p.until=0;if(ttl)cachePut(key,d);
+    return {data:d,stale:false,ts:t,from:"net"};
+  },function(e){return fallback(p,key,e,false);});
+  INF.set(key,pr);
+  var clear=function(){if(INF.get(key)===pr)INF.delete(key);};pr.then(clear,clear);
+  return pr;
+}
+
+/* ---------- Statut d'une source ---------- */
+var LBL={connectee:"Connectée",degradee:"Dégradée",hors_ligne:"Hors ligne",obsolete:"Données obsolètes",inactif:"Inactive"};
+function status(id){
+  var p=P[id];
+  if(!p)return {state:"inactif",label:LBL.inactif,lastOk:0,lastErr:0,msg:"",calls:0,errors:0,paused:false,until:0};
+  var s=p.st,c=p.cfg,t=now(),ps=pauseOf(p),per=c.period>0?c.period:s.ttl>0?s.ttl:300000,state;
+  if(!s.last)state="inactif";
+  else if(s.last==="fail")state="hors_ligne";
+  else if(t-s.dataTs>c.staleMs)state="obsolete";
+  else if(s.last==="stale"||t-s.lastOk>2*per||(s.lastErr&&t-s.lastErr<2*per))state="degradee";
+  else state="connectee";
+  return {state:state,label:LBL[state],lastOk:s.lastOk,lastErr:s.lastErr,msg:ps.until?ps.why:s.msg,calls:s.calls,errors:s.errors,paused:!!ps.until,until:ps.until};
+}
+
+/* ---------- WebSocket : reconnexion sans fin, backoff plafonné, chien de garde sur le ping seulement ---------- */
+var WS=new Set();
+function ws(url,o){
+  o=o||{};
+  var name=String(o.provider||o.name||"ws"),pg=o.ping&&o.ping.msg!=null?o.ping:null,
+    // Le silence est contrôlé à chaque ping : un délai plus court que 2 intervalles reconnecterait même avec des pongs réguliers.
+    every=pg&&+pg.every||20000,ptmo=Math.max(pg&&+pg.timeout||90000,2*every),watch=!!(pg&&typeof pg.isPong==="function"),
+    cto=+o.connectTimeout||10000,maxB=+o.maxBackoff||60000,p=o.provider?prov(o.provider):null;
+  var sock=null,st="connexion",k=0,closed=false,tRetry=null,tConn=null,tPing=null,lastPong=0,h;
+  function kill(){
+    tConn=cancel(tConn);tPing=cancel(tPing);
+    if(sock){var s=sock;sock=null;s.onopen=s.onmessage=s.onclose=s.onerror=null;try{s.close();}catch(_){}}
+  }
+  function retry(why){
+    if(closed)return;var was=st;kill();st="reconnexion";
+    // Échec avant l'ouverture : plus de flux → "hors ligne" ; coupure d'un flux ouvert : erreur récente → "dégradée".
+    if(why){log("warn",name,why);if(p){p.st.errors++;p.st.lastErr=now();p.st.msg=why;if(was!=="ouvert")p.st.last="fail";}}
+    if(tRetry!=null)return;
+    var d=Math.round(Math.min(maxB,1500*Math.pow(2,k))*(0.5+E("random")()));k++;
+    tRetry=later(function(){tRetry=null;connect();},d);
+  }
+  function beat(){
+    tPing=null;if(closed||st!=="ouvert"||!sock)return;
+    if(watch&&now()-lastPong>ptmo)return retry("pas de réponse au ping depuis "+Math.round(ptmo/1000)+" s");
+    try{sock.send(typeof pg.msg==="string"?pg.msg:JSON.stringify(pg.msg));}catch(_){}
+    tPing=later(beat,every);
+  }
+  function connect(){
+    if(closed)return;kill();
+    var s;try{s=new (E("WebSocket"))(url);}catch(e){return retry("connexion impossible : "+msgOf(e));}
+    sock=s;if(p)p.st.calls++;
+    tConn=later(function(){tConn=null;if(sock===s&&st!=="ouvert")retry("délai de connexion dépassé");},cto);
+    s.onopen=function(){
+      if(sock!==s)return;tConn=cancel(tConn);k=0;st="ouvert";lastPong=now();
+      if(p){p.st.lastOk=lastPong;p.st.last="ok";p.st.dataTs=lastPong;}
+      log("info",name,"connecté");
+      if(o.onOpen)try{o.onOpen(s);}catch(e){log("error",name,"onOpen : "+msgOf(e));}
+      if(pg&&st==="ouvert"&&sock===s)tPing=later(beat,every);
+    };
+    s.onmessage=function(ev){
+      if(sock!==s)return;var d=ev&&typeof ev==="object"&&"data" in ev?ev.data:ev;
+      if(watch){var pong=false;try{pong=!!pg.isPong(d);}catch(_){}if(pong){lastPong=now();return;}}
+      if(p){p.st.lastOk=now();p.st.last="ok";p.st.dataTs=p.st.lastOk;}
+      if(o.onMessage)try{o.onMessage(d);}catch(e){log("error",name,"onMessage : "+msgOf(e));}
+    };
+    s.onclose=function(ev){if(sock===s)retry("connexion fermée"+(ev&&ev.code?" ("+ev.code+")":""));};
+    s.onerror=function(){}; // la fermeture suit (sinon le délai de connexion ou le ping prennent le relais)
+  }
+  h={
+    send:function(m){if(st!=="ouvert"||!sock)return false;try{sock.send(typeof m==="string"?m:JSON.stringify(m));return true;}catch(_){return false;}},
+    close:function(){if(closed)return;closed=true;tRetry=cancel(tRetry);kill();st="ferme";WS.delete(h);log("info",name,"fermé");},
+    state:function(){return st;},
+    /** À appeler sur l'événement 'online' : reconnecte tout de suite (sauf si déjà ouvert ou fermé). */
+    online:function(){if(closed||st==="ouvert")return false;tRetry=cancel(tRetry);k=0;connect();return true;}
+  };
+  WS.add(h);connect();
+  return h;
+}
+ws.online=function(){var n=0;WS.forEach(function(h){if(h.online())n++;});return n;};
+
+/* ---------- IndexedDB (base "cockpit:<id>:marches") avec repli mémoire transparent ---------- */
+var STORES=["bars","quotes","meta"],MEM=null,DBP=null,MODE=null;
+function memStore(s){if(!MEM){MEM={};STORES.forEach(function(n){MEM[n]=new Map();});}return MEM[s];}
+function clone(v){try{var sc=window.structuredClone;return sc?sc(v):JSON.parse(JSON.stringify(v));}catch(_){return v;}}
+/** window.indexedDB peut lever à la simple lecture (iframe isolée, cookies bloqués) : null = absent. */
+function idbApi(){try{return E("indexedDB")||null;}catch(_){return null;}}
+function dbName(){var id="desk";try{var c=CK.cfg&&CK.cfg();if(c&&c.id)id=String(c.id);}catch(_){}return "cockpit:"+id+":marches";}
+function openDB(){
+  if(DBP)return DBP;
+  DBP=new Promise(function(res){
+    var I=idbApi(),done=false,tm=null,fin=function(db){if(done)return;done=true;tm=cancel(tm);MODE=db?"indexeddb":"memoire";
+      if(!db)log("warn","idb","IndexedDB indisponible : stockage en mémoire");res(db||null);};
+    if(!I||typeof I.open!=="function")return fin(null);
+    try{
+      var r=I.open(dbName(),1);
+      r.onupgradeneeded=function(){var db=r.result;STORES.forEach(function(n){if(!db.objectStoreNames.contains(n))db.createObjectStore(n);});};
+      // Base ouverte après le délai (déjà passé en mémoire) : on la referme pour ne pas bloquer une future mise à niveau.
+      r.onsuccess=function(){if(done){try{r.result.close();}catch(_){}return;}fin(r.result);};r.onerror=function(){fin(null);};r.onblocked=function(){fin(null);};
+      if(!done)tm=later(function(){tm=null;fin(null);},5000);
+    }catch(e){fin(null);}
+  });
+  return DBP;
+}
+function op(store,mode,fn,mem){
+  if(STORES.indexOf(store)<0)return Promise.reject(new Error("store inconnu : "+store));
+  return openDB().then(function(db){
+    if(!db)return mem(memStore(store));
+    return new Promise(function(res,rej){var r=fn(db.transaction(store,mode).objectStore(store));
+      r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error||new Error("IndexedDB"));};})
+      .then(null,function(e){log("warn","idb","IndexedDB en erreur, repli mémoire : "+msgOf(e));MODE="memoire";DBP=Promise.resolve(null);return mem(memStore(store));});
+  });
+}
+var idb={
+  get:function(s,k){return op(s,"readonly",function(o){return o.get(k);},function(m){return m.has(k)?clone(m.get(k)):undefined;});},
+  put:function(s,k,v){return op(s,"readwrite",function(o){return o.put(v,k);},function(m){m.set(k,clone(v));return k;});},
+  del:function(s,k){return op(s,"readwrite",function(o){return o.delete(k);},function(m){m.delete(k);return undefined;});},
+  keys:function(s){return op(s,"readonly",function(o){return o.getAllKeys();},function(m){return Array.from(m.keys());});},
+  clear:function(s){return op(s,"readwrite",function(o){return o.clear();},function(m){m.clear();return undefined;});},
+  mode:function(){return MODE||(idbApi()?"indexeddb":"memoire");},
+  name:dbName
+};
+
+/* ---------- Remise à zéro (tests) ---------- */
+function reset(){
+  WS.forEach(function(h){h.close();});WS.clear();
+  Object.keys(P).forEach(function(id){var p=P[id];if(p.timer!=null)try{cancel(p.timer);}catch(_){}});
+  P=Object.create(null);C.clear();INF.clear();MEM=null;DBP=null;MODE=null;LOGS.length=0;
+}
+
+var dk=CK.dk={
+  env:Object.assign({},DEF),
+  provider:function(id,opts){var p=prov(id,opts);return Object.assign({id:p.id},p.cfg,{guard:p.cfg.guard.slice()});},
+  fetch:dkFetch,status:status,log:log,logs:logs,ws:ws,idb:idb,_reset:reset
+};
+})();
+
+/* ================================================================
+   COCKPIT — Change : conversion en EUR (phase 1)
+   Taux stockés en « EUR pour 1 unité de la devise » (USD → ~0,90).
+   Fixings quotidiens BCE (Frankfurter) + taux en direct (setLive, ex. EURUSD TradingView).
+   Conventions : EUR = 1 ; GBX/GBp (pence) = GBP/100 ; USDT, USDC, FDUSD, DAI ≈ USD ;
+   devise inconnue → null (jamais 1 par défaut).
+   Aucun appel réseau ni minuterie au chargement : tout passe par CK.fx.load().
+   ================================================================ */
+(function(){
+"use strict";
+var CK=window.CK=window.CK||{};
+
+var FR="https://api.frankfurter.dev/v1/",FR2="https://api.frankfurter.dev/v2/rates?base=EUR&providers=ECB";
+var TTL=6*3600000,DAY=86400000,LIVE_MAX=DAY;
+/* Devises de l'historique chargé par défaut (le dernier fixing, lui, contient toutes les devises BCE) */
+var SYMS=["USD","GBP","CHF","JPY","SEK","NOK","DKK","PLN","CZK","HUF","CAD","AUD","HKD","SGD","CNY"];
+/* Alias : [devise de référence, multiplicateur]. « GBp » est testé tel quel avant la mise en majuscules (sinon il deviendrait GBP). */
+var ALIAS={GBX:["GBP",0.01],GBp:["GBP",0.01],USDT:["USD",1],USDC:["USD",1],FDUSD:["USD",1],DAI:["USD",1]};
+var CCY_RE=/^[A-Z]{3}$/,YMD_RE=/^\d{4}-\d{2}-\d{2}/;
+
+var D={},LIVE={},INFO={source:null,loadedAt:null,stale:false};   // D[ccy] = {m:{date:taux}, k:[dates triées]|null}
+
+function now(){var e=CK.dk&&CK.dk.env;return e&&typeof e.now==="function"?e.now():Date.now();}
+function fin(x){x=typeof x==="string"&&x.trim()!==""?Number(x):x;return typeof x==="number"&&isFinite(x)?x:null;}
+/** "AAAA-MM-JJ" depuis une chaîne, un nombre (ms, jour UTC) ou une Date ; null si illisible ou date inexistante (2026-13-45). */
+function ymd(v){
+  if(v==null||v==="")return null;
+  if(typeof v==="object"&&typeof v.getTime==="function")v=v.getTime();   // Date (même venue d'un autre cadre)
+  if(typeof v==="number"){if(!isFinite(v))return null;var d=new Date(v);return isNaN(d.getTime())?null:d.toISOString().slice(0,10);}
+  var s=String(v).trim().slice(0,10);if(!YMD_RE.test(s))return null;
+  var t=new Date(s+"T00:00:00Z");return !isNaN(t.getTime())&&t.toISOString().slice(0,10)===s?s:null;
+}
+/** Devise → [référence, multiplicateur] ou null. */
+function res(c){
+  if(c==null)return null;c=String(c).trim();
+  if(ALIAS.hasOwnProperty(c))return ALIAS[c];
+  var u=c.toUpperCase();if(ALIAS.hasOwnProperty(u))return ALIAS[u];
+  return CCY_RE.test(u)?[u,1]:null;
+}
+function put(c,date,eur){
+  if(!CCY_RE.test(c)||c==="EUR"||!(eur>0)||!date)return false;
+  var s=D[c]||(D[c]={m:{},k:null});if(s.m[date]!==eur){s.m[date]=eur;s.k=null;}return true;
+}
+function keys(s){return s.k||(s.k=Object.keys(s.m).sort());}
+/** Dernier fixing ≤ date (recherche dichotomique) ; date absente → dernier fixing connu. */
+function fixing(c,date){
+  var s=D[c];if(!s)return null;var k=keys(s);if(!k.length)return null;
+  if(date==null)return {date:k[k.length-1],rate:s.m[k[k.length-1]]};
+  var lo=0,hi=k.length-1,i=-1;
+  while(lo<=hi){var mid=(lo+hi)>>1;if(k[mid]<=date){i=mid;lo=mid+1;}else hi=mid-1;}
+  return i<0?null:{date:k[i],rate:s.m[k[i]]};
+}
+
+/** Fixings quotidiens : [["AAAA-MM-JJ", eurParUnite], …] ou {date: taux}. Fusionne avec l'existant. Renvoie le nombre de points retenus. */
+function setDaily(ccy,series){
+  var r=res(ccy);if(!r||r[1]!==1||r[0]!==String(ccy).trim().toUpperCase())return 0;   // pas de série pour un alias (GBX, USDT…)
+  var n=0,c=r[0],add=function(d,v){if(put(c,ymd(d),fin(v)))n++;};
+  if(Array.isArray(series))series.forEach(function(p){if(Array.isArray(p))add(p[0],p[1]);});
+  else if(series&&typeof series==="object")Object.keys(series).forEach(function(d){add(d,series[d]);});
+  return n;
+}
+/** Taux en direct (EUR pour 1 unité), valable un jour. */
+function setLive(ccy,eur,ts){
+  var r=res(ccy);eur=fin(eur);if(!r||r[1]!==1||r[0]==="EUR"||r[0]!==String(ccy).trim().toUpperCase()||!(eur>0))return false;
+  LIVE[r[0]]={rate:eur,ts:fin(ts)||now()};return true;
+}
+/** EUR pour 1 unité de ccy. date absente → direct (< 1 jour) sinon dernier fixing ; date → dernier fixing ≤ date, null si aucun. */
+function rate(ccy,date){
+  var r=res(ccy);if(!r)return null;if(r[0]==="EUR")return r[1];
+  if(date==null){
+    var l=LIVE[r[0]];if(l&&Math.abs(now()-l.ts)<LIVE_MAX)return l.rate*r[1];
+    var f=fixing(r[0],null);return f?f.rate*r[1]:null;
+  }
+  var d=ymd(date);if(!d)return null;
+  var g=fixing(r[0],d);return g?g.rate*r[1]:null;
+}
+function toEUR(amount,ccy,date){var a=fin(amount),r=rate(ccy,date);return a==null||r==null?null:a*r;}
+/** Rendement en EUR d'un rendement local entre d0 et d1 : (1 + r_loc)·(fx(d1)/fx(d0)) − 1. */
+function ret(rLocal,ccy,d0,d1){
+  var r=fin(rLocal),f0=rate(ccy,d0),f1=rate(ccy,d1);
+  return r==null||f0==null||f1==null||!(f0>0)?null:(1+r)*(f1/f0)-1;
+}
+
+/* ---------- Chargement ----------
+   Frankfurter (BCE) donne « 1 EUR = x devise » : on stocke 1/x.
+   Dernier fixing : FR+"latest?base=EUR" → {base, date, rates:{USD:1.1081,…}}
+   Historique     : FR+"AAAA-MM-JJ..?base=EUR&symbols=…" → {base, start_date, end_date, rates:{"AAAA-MM-JJ":{USD:…},…}}
+                    (quotidien, jours ouvrés BCE ; la 1re date est le dernier fixing ≤ début demandé).
+   Secours 1 (API v1 dépréciée par Frankfurter depuis mai 2026, en-tête Deprecation) : v2 avec providers=ECB, mêmes fixings BCE,
+                    FR2 → [{date, base:"EUR", quote:"USD", rate:1.1081}, …] (&from=AAAA-MM-JJ pour l'historique, &quotes=… pour les devises).
+   Secours 2 (si une partie échoue encore) : fichier du robot `${data}/data/fx.json`, MÊME FORMAT que l'historique v1
+   Frankfurter : {"_doc":"…", "base":"EUR", "src":"BCE", "updated":"AAAA-MM-JJ", "rates":{"AAAA-MM-JJ":{"USD":1.1081,…},…}}. */
+function validFx(d){
+  if(Array.isArray(d))return d.some(function(p){return p&&p.base==="EUR"&&p.quote&&p.date&&fin(p.rate)>0;})?true:"pas de taux en base EUR";   // v2
+  return d&&typeof d==="object"&&d.rates&&typeof d.rates==="object"&&(d.base==null||d.base==="EUR")?true:"pas de taux en base EUR";
+}
+function apply(d){
+  var n=0,R=d.rates,one=function(date,o){if(!date||!o||typeof o!=="object")return;Object.keys(o).forEach(function(c){var x=fin(o[c]);if(x>0&&put(c,date,1/x))n++;});};
+  if(Array.isArray(d))d.forEach(function(p){var x=p&&fin(p.rate);if(p&&p.base==="EUR"&&x>0&&put(String(p.quote),ymd(p.date),1/x))n++;});   // v2 : [{date, base, quote, rate}]
+  else if(ymd(d.date)&&Object.keys(R).some(function(k){return typeof R[k]!=="object";}))one(ymd(d.date),R);
+  else Object.keys(R).forEach(function(k){one(ymd(k),R[k]);});
+  return n;
+}
+function get(url){
+  if(CK.dk&&typeof CK.dk.fetch==="function")
+    return CK.dk.fetch(url,{provider:"fx",parse:"json",ttl:TTL,validate:validFx}).then(function(r){return {data:r&&r.data,stale:!!(r&&r.stale)};});
+  var f=window.fetch;if(typeof f!=="function")return Promise.reject(new Error("réseau indisponible"));
+  /* Repli sans CK.dk : délai maximal de 15 s pour que load() finisse toujours */
+  return new Promise(function(res,rej){
+    var T=window.setTimeout,tm=typeof T==="function"?T(function(){rej(new Error("Délai dépassé"));},15000):null;
+    Promise.resolve().then(function(){return f.call(window,url);})
+      .then(function(r){if(!r||!r.ok)throw new Error("HTTP "+(r?r.status:0));return r.json();})
+      .then(function(d){var v=validFx(d);if(v!==true)throw new Error(v);return {data:d,stale:false};})
+      .then(res,rej).then(function(){if(tm!=null&&typeof window.clearTimeout==="function")window.clearTimeout(tm);});
+  });
+}
+function log(level,msg){if(CK.dk&&typeof CK.dk.log==="function")try{CK.dk.log(level,"fx",msg);}catch(e){}}
+function cfgData(){try{var c=CK.cfg&&CK.cfg();return c&&c.data||"";}catch(e){return "";}}
+/**
+ * Charge le dernier fixing et l'historique. opts : {from:"AAAA-MM-JJ"|ms (défaut : 3 ans), days, symbols:[…], base (adresse du robot), robot:false}.
+ * Chaque partie essaie Frankfurter v1, puis Frankfurter v2 (fournisseur BCE, mêmes fixings) ; si une partie échoue encore, fichier du robot.
+ * Ne rejette jamais : résout {ok, source:"frankfurter"|"frankfurter-v2"|"robot"|null, stale, points, date (dernier fixing USD), errors:[une ligne par partie en échec]}.
+ */
+function load(opts){
+  var o=opts||{},out={ok:false,source:null,stale:false,points:0,date:null,errors:[]},miss=false;
+  /* tries : [[source, url], …] essayées dans l'ordre jusqu'au premier succès */
+  var part=function(tries){
+    var errs=[],run=function(i){
+      if(i>=tries.length){miss=true;out.errors.push(errs.join(" ; "));return;}
+      var t=tries[i];
+      return get(t[1]).then(function(r){
+        var v=r&&r.data!=null?validFx(r.data):"réponse vide";if(v!==true)throw new Error(v);
+        out.points+=apply(r.data);out.stale=out.stale||!!r.stale;if(!out.source)out.source=t[0];
+      }).then(null,function(e){var m=t[0]+" : "+(e&&e.message||e);errs.push(m);log("warn",m);return run(i+1);});
+    };
+    return Promise.resolve().then(function(){return run(0);});
+  };
+  var done=function(){
+    var f=fixing("USD",null);out.date=f?f.date:null;out.ok=out.points>0;
+    if(out.ok){INFO.source=out.source;INFO.loadedAt=now();INFO.stale=out.stale;}
+    return out;
+  };
+  try{
+    if(CK.dk&&typeof CK.dk.provider==="function")try{CK.dk.provider("fx",{label:"Change (BCE / Frankfurter)",rate:1,burst:2,timeout:12000,period:TTL,staleMs:2*DAY});}catch(e){}   // fixings quotidiens : pas « obsolète » au bout de 30 min
+    var from=ymd(o.from)||ymd(now()-(fin(o.days)||1100)*DAY);
+    var sym=(Array.isArray(o.symbols)?o.symbols:SYMS).map(function(c){return String(c).toUpperCase();}).filter(function(c){return CCY_RE.test(c)&&c!=="EUR";}).join(",");
+    var base=String((o.base!=null?o.base:cfgData())||"").replace(/\/+$/,"");
+    return Promise.all([
+      part([["frankfurter",FR+"latest?base=EUR"],["frankfurter-v2",FR2]]),
+      part([["frankfurter",FR+from+"..?base=EUR"+(sym?"&symbols="+sym:"")],["frankfurter-v2",FR2+"&from="+from+(sym?"&quotes="+sym:"")]])
+    ]).then(function(){if(miss&&base&&o.robot!==false)return part([["robot",base+"/data/fx.json"]]);})
+      .then(done,function(e){out.errors.push(String(e&&e.message||e));return done();});
+  }catch(e){out.errors.push(String(e&&e.message||e));return Promise.resolve(done());}
+}
+
+CK.fx={
+  setDaily:setDaily,setLive:setLive,rate:rate,toEUR:toEUR,ret:ret,load:load,
+  /** Dernier fixing ≤ date : {date, rate} (EUR pour 1 unité, alias appliqués) ou null. */
+  fixing:function(ccy,date){var r=res(ccy);if(!r)return null;if(r[0]==="EUR")return {date:ymd(date),rate:r[1]};
+    var d=date==null?null:ymd(date);if(date!=null&&!d)return null;var f=fixing(r[0],d);return f?{date:f.date,rate:f.rate*r[1]}:null;},
+  /** Vrai si la devise est convertible (EUR, alias ou taux connu). */
+  has:function(ccy,date){return rate(ccy,date)!=null;},
+  currencies:function(){return Object.keys(D).sort();},
+  info:function(){var l={};Object.keys(LIVE).forEach(function(c){l[c]={rate:LIVE[c].rate,ts:LIVE[c].ts};});
+    var f=fixing("USD",null);return {source:INFO.source,loadedAt:INFO.loadedAt,stale:INFO.stale,last:f?f.date:null,currencies:Object.keys(D).sort(),live:l};},
+  ALIAS:ALIAS,
+  _reset:function(){D={};LIVE={};INFO={source:null,loadedAt:null,stale:false};}
+};
+})();
+
+/* ================================================================
+   COCKPIT — Calendriers de marché (phase 1)
+   Jours fériés calculés par RÈGLE (Pâques : algorithme de Meeus/Butcher), jamais par liste :
+   valables pour toute année sans mise à jour. Heures locales converties en ms UTC via Intl
+   (heure d'été gérée par le fuseau de la place).
+   Marchés : "euronext", "xetra", "nyse", "crypto" (toujours ouvert).
+   Limites : fermetures exceptionnelles (deuil national, panne) non prévisibles ; Juneteenth à partir de 2022 ;
+   clôture 14h05 des demi-séances Euronext à confirmer chaque année sur l'avis Euronext.
+   Aucun accès au DOM ni minuterie au chargement.
+   ================================================================ */
+(function(){
+"use strict";
+var CK=window.CK=window.CK||{};
+
+var DAY=86400000,YMD_RE=/^(\d{4})-(\d{2})-(\d{2})$/;
+var NAMES={nyd:"Jour de l'an",gf:"Vendredi saint",em:"Lundi de Pâques",may:"Fête du Travail",xmas:"Noël",boxing:"Lendemain de Noël",
+  xeve:"Veille de Noël",nye:"Saint-Sylvestre",mlk:"Martin Luther King Day",pres:"Presidents' Day",mem:"Memorial Day",
+  june:"Juneteenth",ind:"Independence Day",labor:"Labor Day",thx:"Thanksgiving"};
+
+/* ---------- Dates (calcul en UTC pur, sans fuseau) ---------- */
+function pad(n){return (n<10?"0":"")+n;}
+function mk(y,m,d){return y+"-"+pad(m)+"-"+pad(d);}
+function parse(s){var m=YMD_RE.exec(String(s==null?"":s));if(!m)return null;var y=+m[1],mo=+m[2],d=+m[3],t=Date.UTC(y,mo-1,d),x=new Date(t);
+  return x.getUTCMonth()===mo-1&&x.getUTCDate()===d?{y:y,m:mo,d:d,t:t}:null;}
+function fromT(t){var x=new Date(t);return mk(x.getUTCFullYear(),x.getUTCMonth()+1,x.getUTCDate());}
+function add(s,n){var p=parse(s);return p?fromT(p.t+n*DAY):null;}
+function dow(y,m,d){return new Date(Date.UTC(y,m-1,d)).getUTCDay();}          // 0 = dimanche
+function isWeekend(s){var p=parse(s);if(!p)return false;var w=dow(p.y,p.m,p.d);return w===0||w===6;}
+function nth(y,m,wd,n){return 1+(wd-dow(y,m,1)+7)%7+(n-1)*7;}                 // n-ième jour wd du mois
+function lastWd(y,m,wd){var L=new Date(Date.UTC(y,m,0)).getUTCDate();return L-(dow(y,m,L)-wd+7)%7;}
+
+/** Dimanche de Pâques (calendrier grégorien), algorithme de Meeus/Butcher. */
+function easter(y){
+  y=Math.floor(+y);if(!(y>=1583&&y<=9999))return null;
+  var a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+      h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+      x=h+l-7*m+114;
+  return mk(y,Math.floor(x/31),x%31+1);
+}
+/* Règle américaine d'observation : samedi → vendredi, dimanche → lundi. */
+function observed(y,m,d){var w=dow(y,m,d),s=mk(y,m,d);return w===6?add(s,-1):w===0?add(s,1):s;}
+
+/* ---------- Règles par place : fermetures et demi-séances d'une année ---------- */
+function eurRules(y,extra){
+  var e=easter(y),h={};
+  h[mk(y,1,1)]="nyd";h[add(e,-2)]="gf";h[add(e,1)]="em";h[mk(y,5,1)]="may";h[mk(y,12,25)]="xmas";h[mk(y,12,26)]="boxing";
+  (extra||[]).forEach(function(x){h[mk(y,x[0],x[1])]=x[2];});
+  return h;
+}
+function nyseRules(y){
+  var h={},e=easter(y),nyd=mk(y,1,1),w=dow(y,1,1);
+  if(w!==6)h[w===0?mk(y,1,2):nyd]="nyd";                  // 1er janvier un samedi : pas d'observation le 31/12
+  h[mk(y,1,nth(y,1,1,3))]="mlk";h[mk(y,2,nth(y,2,1,3))]="pres";h[add(e,-2)]="gf";h[mk(y,5,lastWd(y,5,1))]="mem";
+  if(y>=2022)h[observed(y,6,19)]="june";
+  h[observed(y,7,4)]="ind";h[mk(y,9,nth(y,9,1,1))]="labor";h[mk(y,11,nth(y,11,4,4))]="thx";h[observed(y,12,25)]="xmas";
+  return h;
+}
+var MK={
+  euronext:{label:"Euronext Paris",tz:"Europe/Paris",open:"09:00",close:"17:30",half:"14:05",
+    hol:function(y){return eurRules(y);},
+    halves:function(y){var o={};o[mk(y,12,24)]=1;o[mk(y,12,31)]=1;return o;}},
+  xetra:{label:"Xetra (Francfort)",tz:"Europe/Berlin",open:"09:00",close:"17:30",half:null,
+    hol:function(y){return eurRules(y,[[12,24,"xeve"],[12,31,"nye"]]);},
+    halves:function(){return {};}},
+  nyse:{label:"NYSE / Nasdaq",tz:"America/New_York",open:"09:30",close:"16:00",half:"13:00",
+    hol:nyseRules,
+    halves:function(y){var o={},j3=mk(y,7,3);
+      o[add(mk(y,11,nth(y,11,4,4)),1)]=1;                                    // lendemain de Thanksgiving
+      o[mk(y,12,24)]=1;                                                       // 24/12 (ignoré si férié ou week-end)
+      if(observed(y,7,4)!==j3)o[j3]=1;                                        // 3/7 si le 4/7 n'est pas observé ce jour-là (ignoré le week-end)
+      return o;}},
+  crypto:{label:"Crypto",tz:"UTC",always:true}
+};
+var CACHE={};
+function yearOf(m,y){var k=m+":"+y;if(!CACHE[k]){var M=MK[m];CACHE[k]=easter(y)?{hol:M.hol(y),half:M.halves(y)}:{hol:{},half:{}};}return CACHE[k];}
+function mkt(m){return Object.prototype.hasOwnProperty.call(MK,m)?MK[m]:null;}
+
+/* ---------- Fuseaux (Intl) ---------- */
+var FMT=Object.create(null);
+/** Formateur mis en cache ; null si le fuseau est inconnu (pas d'exception). */
+function fmt(tz){tz=String(tz||"UTC");if(!(tz in FMT))try{FMT[tz]=new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"});}catch(e){FMT[tz]=null;}return FMT[tz];}
+/** Heure murale de ts dans tz : {y,m,d,h,mi,s} ; null si ts n'est pas un instant valide ou tz inconnu. */
+function wall(ts,tz){var F=fmt(tz),x=new Date(typeof ts==="number"?ts:NaN);if(!F||isNaN(x.getTime()))return null;
+  var o={};F.formatToParts(x).forEach(function(p){if(p.type!=="literal")o[p.type]=+p.value;});
+  return {y:o.year,m:o.month,d:o.day,h:o.hour===24?0:o.hour,mi:o.minute,s:o.second};}
+function offset(ts,tz){var w=wall(ts,tz);return w?Date.UTC(w.y,w.m-1,w.d,w.h,w.mi,w.s)-Math.floor(ts/1000)*1000:null;}
+/** ms UTC de l'heure locale "HH:MM" du jour ymd dans le fuseau tz (heure d'été comprise). */
+function zoned(s,hm,tz){
+  var p=parse(s),t=/^(\d{1,2}):(\d{2})$/.exec(String(hm||""));if(!p||!t||+t[1]>23||+t[2]>59)return null;
+  var guess=Date.UTC(p.y,p.m-1,p.d,+t[1],+t[2]),o1=offset(guess,tz||"UTC");if(o1==null)return null;
+  var o2=offset(guess-o1,tz||"UTC");return o2==null?null:guess-o2;
+}
+function dayIn(ts,tz){var w=wall(ts,tz);return w?mk(w.y,w.m,w.d):null;}
+function toYmd(v,tz){if(typeof v==="number"&&isFinite(v))return dayIn(v,tz||"UTC");var p=parse(v);return p?mk(p.y,p.m,p.d):null;}
+function now(){var e=CK.dk&&CK.dk.env;return e&&typeof e.now==="function"?e.now():Date.now();}
+
+/* ---------- API ---------- */
+/** Nom du jour férié (fermeture en semaine) ou null. Un férié tombant un week-end n'est pas compté (le week-end prime). */
+function holidayName(m,v){var M=mkt(m);if(!M||M.always)return null;var s=toYmd(v,M.tz);if(!s||isWeekend(s))return null;
+  var c=yearOf(m,+s.slice(0,4)).hol[s];return c?NAMES[c]:null;}
+function isHoliday(m,v){return holidayName(m,v)!=null;}
+function isTradingDay(m,v){var M=mkt(m);if(!M)return false;var s=toYmd(v,M.tz);if(!s)return false;if(M.always)return true;return !isWeekend(s)&&!isHoliday(m,s);}
+function isHalfDay(m,v){var M=mkt(m);if(!M||M.always||!M.half)return false;var s=toYmd(v,M.tz);return !!s&&isTradingDay(m,s)&&!!yearOf(m,+s.slice(0,4)).half[s];}
+/** Séance du jour : {open, close (ms UTC), half} ou null si fermé. Crypto : journée UTC complète. */
+function session(m,v){
+  var M=mkt(m);if(!M)return null;var s=toYmd(v,M.tz);if(!s||!isTradingDay(m,s))return null;
+  if(M.always){var t=parse(s).t;return {open:t,close:t+DAY,half:false};}
+  var half=isHalfDay(m,s);return {open:zoned(s,M.open,M.tz),close:zoned(s,half?M.half:M.close,M.tz),half:half};
+}
+function step(m,v,dir){var M=mkt(m);if(!M)return null;var s=toYmd(v,M.tz);if(!s)return null;
+  for(var i=0;i<30;i++){s=add(s,dir);if(isTradingDay(m,s))return s;}return null;}
+function nextTradingDay(m,v){return step(m,v,1);}
+function prevTradingDay(m,v){return step(m,v,-1);}
+/** Dernier jour de bourse du mois (mo de 1 à 12). */
+function lastTradingDayOfMonth(m,y,mo){
+  y=Math.floor(+y);mo=Math.floor(+mo);if(!mkt(m)||!(mo>=1&&mo<=12)||!easter(y))return null;
+  var L=mk(y,mo,new Date(Date.UTC(y,mo,0)).getUTCDate());return isTradingDay(m,L)?L:prevTradingDay(m,L);
+}
+/** État à l'instant ts (défaut : maintenant) : {open, label, next_open, close (si ouvert), half, holiday} ; null si marché inconnu ou instant hors limites. */
+function state(m,ts){
+  var M=mkt(m);if(!M)return null;ts=typeof ts==="number"&&isFinite(ts)?ts:now();
+  if(M.always)return {open:true,label:"Ouvert",next_open:null,close:null,half:false,holiday:null};
+  var s=dayIn(ts,M.tz);if(!s)return null;var se=session(m,s);
+  if(se&&ts>=se.open&&ts<se.close)return {open:true,label:se.half?"Séance écourtée":"Ouvert",next_open:null,close:se.close,half:se.half,holiday:null};
+  var nx=se&&ts<se.open?se.open:null;if(nx==null){var n=nextTradingDay(m,s);nx=n?session(m,n).open:null;}
+  var hn=holidayName(m,s);
+  return {open:false,label:isWeekend(s)?"Fermé (week-end)":hn?"Fermé (jour férié)":"Fermé",next_open:nx,close:null,half:false,holiday:hn};
+}
+function isOpen(m,ts){var st=state(m,ts);return !!(st&&st.open);}
+/** Fermetures en semaine et demi-séances d'une année : [{date, name|null, half:boolean}] triées. */
+function holidays(m,y){
+  var M=mkt(m);y=Math.floor(+y);if(!M||M.always||!easter(y))return [];
+  var Y=yearOf(m,y),out=[];
+  Object.keys(Y.hol).forEach(function(s){if(s.slice(0,4)===String(y)&&!isWeekend(s))out.push({date:s,name:NAMES[Y.hol[s]],half:false});});
+  Object.keys(Y.half).forEach(function(s){if(isHalfDay(m,s))out.push({date:s,name:null,half:true});});
+  return out.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
+}
+
+CK.cal={
+  MARKETS:Object.keys(MK).map(function(id){return {id:id,label:MK[id].label,tz:MK[id].tz};}),
+  easter:easter,isHoliday:isHoliday,holidayName:holidayName,isTradingDay:isTradingDay,isHalfDay:isHalfDay,
+  session:session,state:state,isOpen:isOpen,nextTradingDay:nextTradingDay,prevTradingDay:prevTradingDay,
+  lastTradingDayOfMonth:lastTradingDayOfMonth,holidays:holidays,
+  parisDay:function(ts){return dayIn(typeof ts==="number"&&isFinite(ts)?ts:now(),"Europe/Paris");},
+  dayIn:dayIn,zoned:zoned,
+  /** Heure murale "HH:MM" de ts dans tz (pour l'affichage et les tests). */
+  hm:function(ts,tz){var w=wall(ts,tz||"Europe/Paris");return w?pad(w.h)+":"+pad(w.mi):null;}
+};
+})();
+
+/* ================================================================
+   COCKPIT — Éligibilité PEA / PEA-PME (phase 1)
+   Ordre de priorité : ta correction > référentiel (avec source) > règles certaines (non éligible)
+   > règle légale pour les actions UE/EEE (eligible_regle) > « à vérifier ».
+   Un fonds (ETF, OPCVM) n'est JAMAIS déclaré éligible par déduction.
+   Aucun accès au DOM ni minuterie au chargement : testable dans Node (vmkit.mjs).
+   ================================================================ */
+(function(){
+"use strict";
+var CK=window.CK=window.CK||{};
+
+/* Pays de l'UE (27) + EEE (Islande, Norvège, Liechtenstein) : préfixes ISIN. */
+var EEA=["AT","BE","BG","CY","CZ","DE","DK","EE","ES","FI","FR","GR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","IS","NO","LI"];
+var STATUSES=["eligible","eligible_regle","not_eligible","unknown"];
+var FUNDS={etf:1,fonds:1};
+var NON_INVEST={indice:1,taux:1};
+var DAY=86400000,STALE_DAYS=365,KEY="pea:overrides";
+var SRC_REGLE="règle : société UE/EEE, art. L221-31 CMF";
+var SRC_PME_ETF="constat : aucun ETF éligible PEA-PME depuis 2022";
+var BAD={"__proto__":1,"constructor":1,"prototype":1};
+
+var M=function(){return CK.models||{};};
+function now(opts){
+  var n=opts&&opts.now;if(n instanceof Date)return n.getTime();if(typeof n==="number")return n;
+  var e=CK.dk&&CK.dk.env;return e&&typeof e.now==="function"?e.now():Date.now();
+}
+function today(opts){return new Date(now(opts)).toISOString().slice(0,10);}
+function clean(s,max){var m=M();return m.cleanText?m.cleanText(s,max):String(s==null?"":s).replace(/<[^>]*>/g," ").trim().slice(0,max||200);}
+function label(st,pme){var t=(pme?M().PEA_PME_STATUS:M().PEA_STATUS)||{};return t[st]||st;}
+/** Pays (2 lettres) déduit de l'ISIN, ou null. "XS" (émission internationale) n'est pas un pays de l'EEE. */
+function isinCountry(i){var s=String(i&&i.isin||"").toUpperCase();return /^[A-Z]{2}/.test(s)?s.slice(0,2):null;}
+function inEEA(c){return EEA.indexOf(c)>=0;}
+/** Vrai si la classe (ou un de ses parents) est dans la liste. */
+function classIn(cls,list){if(list.indexOf(cls)>=0)return true;var a=M().classAncestors?M().classAncestors(cls):[];return a.some(function(p){return list.indexOf(p)>=0;});}
+function stale(checked,opts){if(!checked)return true;var t=Date.parse(String(checked).slice(0,10)+"T00:00:00Z");return !isFinite(t)||now(opts)-t>STALE_DAYS*DAY;}
+function res(st,by,source,checked,reason,opts,pme,useStale){
+  return {status:st,label:label(st,pme),source:source||null,checked_at:checked||null,stale_check:useStale?stale(checked,opts):false,reason:reason||"",by:by};
+}
+
+/* ---------- Corrections de l'utilisateur ----------
+   Stockées dans CK.lsj("pea:overrides") si disponible, sinon en mémoire (session).
+   Clé = id de l'instrument (PEA) ou "pme:"+id (PEA-PME). */
+var MEM={};
+function readStore(){
+  var raw=null;if(typeof CK.lsj==="function"){try{raw=CK.lsj(KEY);}catch(e){raw=null;}}else raw=MEM;
+  var out={};if(!raw||typeof raw!=="object")return out;
+  Object.keys(raw).forEach(function(k){var o=raw[k];if(BAD[k]||!o||typeof o!=="object"||STATUSES.indexOf(o.status)<0)return;
+    out[k]={status:o.status,date:typeof o.date==="string"?o.date.slice(0,10):null,note:clean(o.note,200),kind:o.kind==="pme"?"pme":"pea"};});
+  return out;
+}
+function writeStore(map){if(typeof CK.lsj==="function"){try{CK.lsj(KEY,map);}catch(e){}}else MEM=map;}
+function overrides(){return readStore();}
+/** Ajoute (status) ou retire (status = null) ta correction. kind : "pea" (défaut) ou "pme". Renvoie false si refusé. */
+function setOverride(id,status,note,kind,opts){
+  id=clean(id,64);kind=kind==="pme"?"pme":"pea";if(!id||BAD[id])return false;
+  var key=kind==="pme"?"pme:"+id:id,map=readStore();
+  if(status==null)delete map[key];
+  else{if(STATUSES.indexOf(status)<0)return false;map[key]={status:status,date:today(opts),note:clean(note,200),kind:kind};}
+  writeStore(map);return true;
+}
+function ovFor(id,kind){var map=readStore();return map[kind==="pme"?"pme:"+id:id]||null;}
+function ovRes(o,pme,opts){
+  return res(o.status,"utilisateur","correction utilisateur"+(o.note?" : "+o.note:""),o.date,"Corrigé par toi"+(o.date?" le "+o.date:"")+".",opts,pme,true);
+}
+/** Tes corrections au format du référentiel (à coller dans "instruments" de referentiel.json, champ par champ). */
+function exportOverrides(){
+  var map=readStore(),by={},order=[];
+  Object.keys(map).forEach(function(k){var o=map[k],id=o.kind==="pme"?k.slice(4):k;
+    if(!by[id]){by[id]={id:id};order.push(id);}
+    var src="Correction utilisateur"+(o.note?" : "+o.note:"");
+    if(o.kind==="pme"){by[id].pea_pme_status=o.status;by[id].pea_pme_source=src;}
+    else{by[id].pea_eligibility_status=o.status;by[id].pea_source=src;by[id].pea_last_checked_at=o.date;}});
+  return JSON.stringify(order.sort().map(function(id){return by[id];}),null,2);
+}
+
+/* ---------- Statut PEA ---------- */
+/** Statut PEA d'un instrument : {status, label, source, checked_at, stale_check, reason, by}. opts.now injectable (ms ou Date). */
+function status(i,opts){
+  if(!i)return res("unknown","inconnu",null,null,"Instrument inconnu.",opts);
+  // 1) ta correction
+  var o=ovFor(i.id,"pea");if(o)return ovRes(o,false,opts);
+  var st=i.pea_eligibility_status,v=i.vehicle,fund=!!FUNDS[v];
+  // 2) référentiel (statut explicite + source) ; un fonds ne peut pas être « éligible par règle »
+  if(st&&st!=="unknown"&&STATUSES.indexOf(st)>=0&&i.pea_source&&!(st==="eligible_regle"&&v!=="titre"))
+    return res(st,"referentiel",i.pea_source,i.pea_last_checked_at,"Référentiel"+(i.pea_last_checked_at?" (vérifié le "+i.pea_last_checked_at+")":"")+".",opts,false,true);
+  // 3) règles certaines → non éligible
+  var no=function(r){return res("not_eligible","regle","règle : "+r,null,r.charAt(0).toUpperCase()+r.slice(1)+".",opts);};
+  if(NON_INVEST[v]||i.is_investable===false)return no("non investissable (indice, taux ou cours de référence)");
+  if(v==="etc_etn")return no("ETC / ETN, titre de créance et non action");
+  if(classIn(i.asset_class,["obligations"]))return no("obligations exclues du PEA");
+  if(classIn(i.asset_class,["matieres_premieres"]))return no("matières premières exclues du PEA");
+  if(classIn(i.asset_class,["crypto"]))return no("crypto exclue du PEA");
+  if(i.asset_class==="devises")return no("devises exclues du PEA");
+  if(v==="cash"||v==="spot_crypto")return no(v==="cash"?"liquidités hors PEA":"crypto au comptant exclue du PEA");
+  if(i.siic)return no("foncière SIIC / REIT, exclue depuis 2011");
+  if(i.preferred)return no("action de préférence exclue du PEA");
+  var c=isinCountry(i);
+  if(fund){var dom=i.domicile||c;if(dom&&!inEEA(dom))return no("fonds domicilié hors UE/EEE ("+dom+")");}
+  if(v==="titre"&&c&&!inEEA(c))return no("société hors UE/EEE (ISIN "+c+")");
+  // 4) règle légale : action ordinaire d'une société UE/EEE
+  if(v==="titre"&&c&&i.asset_class==="actions")
+    return res("eligible_regle","regle",SRC_REGLE,null,"Action d'une société UE/EEE : éligible selon la règle, à confirmer chez ton courtier.",opts);
+  // 5) inconnu
+  return res("unknown","inconnu",null,null,fund?"Fonds : l'éligibilité n'est jamais déduite. À vérifier sur le DIC, chez l'émetteur ou sur justETF.":
+    v==="titre"&&i.asset_class==="immobilier_cote"?"Foncière : régime fiscal à vérifier (les SIIC et foncières exonérées sont exclues).":"Éligibilité à vérifier.",opts);
+}
+
+/* ---------- Statut PEA-PME (jamais éligible par déduction) ---------- */
+function pmeStatus(i,opts){
+  if(!i)return res("unknown","inconnu",null,null,"Instrument inconnu.",opts,true);
+  var o=ovFor(i.id,"pme");if(o)return ovRes(o,true,opts);
+  var st=i.pea_pme_status;
+  if(st&&st!=="unknown"&&STATUSES.indexOf(st)>=0&&i.pea_pme_source)return res(st,"referentiel",i.pea_pme_source,null,"Référentiel.",opts,true,true);
+  if(i.vehicle==="etf")return res("not_eligible","regle",SRC_PME_ETF,null,"Aucun ETF n'est éligible au PEA-PME depuis 2022.",opts,true);
+  var p=status(i,opts);
+  if(p.status==="not_eligible")return res("not_eligible",p.by,p.source,p.checked_at,"Non éligible au PEA, donc pas au PEA-PME.",opts,true);
+  return res("unknown","inconnu",null,null,"Éligibilité PEA-PME à vérifier (taille de la société : capitalisation sous 2 Md€ sur l'un des 4 derniers exercices).",opts,true);
+}
+
+/* ---------- Ce que chaque compte accepte ---------- */
+/** {ok, reason}. PEA / PEA-PME : fonds → « eligible » seulement ; action → « eligible » ou « eligible_regle ». Autres comptes : tout sauf indices et taux. */
+function allowedIn(i,acc,opts){
+  if(!i)return {ok:false,reason:"Instrument inconnu."};
+  if(NON_INVEST[i.vehicle]||i.is_investable===false)return {ok:false,reason:"Non investissable (indice, taux ou cours de référence)."};
+  if(acc!=="PEA"&&acc!=="PEA_PME")return {ok:true,reason:""};
+  var pme=acc==="PEA_PME",s=pme?pmeStatus(i,opts):status(i,opts),name=pme?"PEA-PME":"PEA";
+  var ok=s.status==="eligible"||(i.vehicle==="titre"&&s.status==="eligible_regle");
+  if(ok)return {ok:true,reason:s.status==="eligible_regle"?"Éligible "+name+" selon la règle, à confirmer chez ton courtier.":""};
+  return {ok:false,reason:s.status==="eligible_regle"?"Un fonds doit être confirmé éligible "+name+" par une source.":
+    s.status==="not_eligible"?"Non éligible "+name+" : "+s.reason:"Éligibilité "+name+" non confirmée : "+s.reason};
+}
+
+/* ---------- Alternatives éligibles PEA (même alt_group), triées par frais puis encours ---------- */
+function alternatives(i,list,opts){
+  if(!i||!i.alt_group)return [];
+  if(!Array.isArray(list))list=CK.ref&&CK.ref.all?CK.ref.all():[];
+  var nz=function(x,d){return typeof x==="number"&&isFinite(x)?x:d;};
+  return list.filter(function(x){return x&&x.id!==i.id&&x.alt_group===i.alt_group&&x.is_active!==false&&allowedIn(x,"PEA",opts).ok;})
+    .sort(function(a,b){return nz(a.ter,1e9)-nz(b.ter,1e9)||nz(b.market_cap_eur,-1)-nz(a.market_cap_eur,-1)||(a.id<b.id?-1:a.id>b.id?1:0);});
+}
+
+CK.pea={EEA:EEA,status:status,pmeStatus:pmeStatus,allowedIn:allowedIn,overrides:overrides,setOverride:setOverride,
+  exportOverrides:exportOverrides,alternatives:alternatives,isinCountry:isinCountry};
+})();
+
+/* ================================================================
+   COCKPIT — Données de marché multi-actifs (phase 1) : CK.mkt
+   Registre de providers (crypto, actions/ETF, indices, matières premières, obligations),
+   adaptateurs TradingView (scanner) et robot (historiques), historique crypto Binance.
+   Tout le réseau passe par CK.dk (datakit.js). Aucun accès au DOM, aucune minuterie,
+   aucun appel réseau au chargement : tout démarre par un appel explicite.
+   Les cotations sont pour l'AFFICHAGE (src:"scan") : le moteur d'allocation ne s'en sert pas.
+   ================================================================ */
+(function(){
+"use strict";
+var CK=window.CK=window.CK||{};
+
+var TV_URL="https://scanner.tradingview.com/global/scan?label-product=desk-marches";
+var BIN_URL="https://data-api.binance.vision/api/v3/klines";
+var DAY=864e5,H6=6*36e5,TV_MAX=200,BIN_LIMIT=1000,BIN_PAGES=20;
+/** Colonnes du scanner, lues PAR POSITION : n'en ajouter qu'à la fin. */
+var TV_COLS=["name","description","type","subtype","exchange","currency","isin","close","open","high","low","volume","change",
+  "Perf.W","Perf.1M","Perf.3M","Perf.6M","Perf.Y","Perf.YTD","Value.Traded","update_mode","last_bar_update_time",
+  "price_52_week_high","price_52_week_low","average_volume_10d_calc","aum","expense_ratio","country","sector"];
+/** Réglages des providers CK.dk utilisés ici (déclarés au premier appel). */
+var DK_CONF={
+  tvscan2:{label:"TradingView (marchés)",rate:0.2,burst:2,budgetPerMin:4,pauseHidden:true,guard:["tvscan"],guardMs:600000,timeout:12000},
+  robotdata:{label:"Robot (historiques)",rate:5,burst:10,timeout:15000},
+  binhist:{label:"Binance (historique crypto)",rate:2,burst:5,timeout:15000}
+};
+var LBL={connectee:"Connectée",degradee:"Dégradée",hors_ligne:"Hors ligne",obsolete:"Données obsolètes",inactif:"Inactive"};
+/* Tables sans prototype : un id ou une clé « toString », « constructor », « __proto__ » n'y est jamais trouvé par erreur. */
+function dict(o){var d=Object.create(null);if(o)Object.keys(o).forEach(function(k){d[k]=o[k];});return d;}
+
+/* ---------- Environnement et datakit, lus au moment de l'appel ----------
+   Le provider CK.dk est (re)déclaré à chaque appel : après CK.dk._reset(), ses réglages (budget, pause onglet caché…)
+   ne sont jamais perdus. La déclaration ne fait que recopier la configuration (aucun état remis à zéro). */
+function dk(){var d=CK.dk;if(!d||typeof d.fetch!=="function")throw new Error("datakit absent");
+  if(typeof d.provider==="function")Object.keys(DK_CONF).forEach(function(id){d.provider(id,DK_CONF[id]);});return d;}
+function env(){return CK.dk&&CK.dk.env||{};}
+function now(){var e=env();return e.now?e.now():Date.now();}
+function hidden(){var e=env();if(e.hidden)return !!e.hidden();var d=window.document;return !!(d&&d.hidden);}
+function later(f,ms){var st=env().setTimeout||window.setTimeout;return st(f,ms);}
+function cancel(t){if(t==null)return;var ct=env().clearTimeout||window.clearTimeout;ct(t);}
+function log(level,prov,msg,extra){try{if(CK.dk&&CK.dk.log)CK.dk.log(level,prov,msg,extra);}catch(e){}}
+function dkStatus(id){try{if(CK.dk&&CK.dk.status)return CK.dk.status(id);}catch(e){}return {state:"inactif",label:LBL.inactif};}
+function M(){return CK.models;}
+function n(v){return M().num(v);}
+function txt(v,max){return M().cleanText(v,max)||null;}
+function why(e){return e&&e.message?e.message:String(e);}
+/** Appelle f et renvoie toujours une promesse (une exception devient un rejet). */
+function call(f){try{return Promise.resolve(f());}catch(e){return Promise.reject(e);}}
+function is404(e){return !!e&&(e.status===404||e.code===404||/\b404\b/.test(String(e.message||"")));}
+
+/** Borne de date : ms, Date ou "AAAA-MM-JJ" (jour UTC entier : début à 00:00, fin à 23:59:59,999). */
+function bound(v,end){
+  if(v==null||v==="")return null;if(typeof v==="number")return isFinite(v)?v:null;
+  if(typeof v.getTime==="function"){var g=v.getTime();return isFinite(g)?g:null;}
+  var s=String(v),t=/^\d{4}-\d{2}-\d{2}$/.test(s)?Date.parse(s+"T00:00:00Z"):Date.parse(s);
+  if(isNaN(t))return null;return end&&/^\d{4}-\d{2}-\d{2}$/.test(s)?t+DAY-1:t;
+}
+function inRange(t,from,to){return (from==null||t>=from)&&(to==null||t<=to);}
+function sortBars(a){var seen={};return a.sort(function(x,y){return x.timestamp-y.timestamp;}).filter(function(b){if(seen[b.timestamp])return false;seen[b.timestamp]=1;return true;});}
+/** Regroupe des barres quotidiennes en semaines (lundi→dimanche, UTC) ou en mois : ouverture du premier jour, clôture et horodatage du dernier. */
+function resample(bars,gran){
+  if(gran!=="1w"&&gran!=="1M")return bars;var out=[],cur=null,key=null;
+  bars.forEach(function(b){var d=Math.floor(b.timestamp/DAY),k=gran==="1w"?d-(d+3)%7:M().isoDate(b.timestamp).slice(0,7);
+    if(k!==key){if(cur)out.push(cur);key=k;cur=Object.assign({},b,{granularity:gran});return;}
+    cur.high=Math.max(cur.high,b.high);cur.low=Math.min(cur.low,b.low);cur.close=b.close;cur.timestamp=b.timestamp;
+    cur.volume=cur.volume==null&&b.volume==null?null:(cur.volume||0)+(b.volume||0);});
+  if(cur)out.push(cur);return out;
+}
+
+/* ================================================================
+   TvScanAdapter : scanner TradingView, un POST groupé pour tous les instruments demandés
+   dans le même tour de boucle (tous providers confondus), 200 tickers au plus par POST.
+   ================================================================ */
+/** Ticker TradingView d'un instrument (tickers.tv, ou id "tv:BOURSE:SYMBOLE"). */
+function tvTicker(i){var t=i&&i.tickers&&i.tickers.tv;if(!t&&i&&/^tv:/i.test(i.id||""))t=String(i.id).slice(3);return t?String(t).trim().toUpperCase():null;}
+function tvRow(d){var o={};TV_COLS.forEach(function(c,k){o[c]=Array.isArray(d)&&k<d.length?d[k]:null;});return o;}
+/** Retard annoncé par update_mode : "delayed_streaming_900" → 900 s, "…_600" → 600 s, "streaming" → 0. */
+function tvDelay(mode){var m=String(mode||""),x=m.match(/(\d+)\s*$/);return x?+x[1]:/streaming/i.test(m)?0:null;}
+/** Ligne {s, d:[…]} du scanner → Quote (null si le cours manque). Les champs descriptifs vont dans q.info. */
+function tvQuote(instr,row,stale){
+  var r=tvRow(row&&row.d),c=n(r.close),ch=n(r.change),t=n(r.last_bar_update_time);
+  if(c==null||c<=0)return null;
+  var q=M().normQuote({instrument_id:instr.id,last:c,prev_close:ch!=null&&ch>-100?c/(1+ch/100):null,open:r.open,high:r.high,low:r.low,
+    volume:r.volume,value_traded:r["Value.Traded"],change_pct:ch,
+    perf:{w:r["Perf.W"],m1:r["Perf.1M"],m3:r["Perf.3M"],m6:r["Perf.6M"],y1:r["Perf.Y"],ytd:r["Perf.YTD"]},
+    currency:r.currency||instr.currency,ts:t>0?t*1000:now(),delay_s:tvDelay(r.update_mode),source:"TradingView",stale:!!stale});
+  q.info={ticker:txt(row.s,40),name:txt(r.name,40),description:txt(r.description,120),type:txt(r.type,20),subtype:txt(r.subtype,20),
+    exchange:txt(r.exchange,20),isin:txt(r.isin,12),high_52w:n(r.price_52_week_high),low_52w:n(r.price_52_week_low),
+    avg_volume_10d:n(r.average_volume_10d_calc),aum:n(r.aum),ter:n(r.expense_ratio),country:txt(r.country,40),sector:txt(r.sector,60)};
+  return q;
+}
+function TvScanAdapter(){
+  var batch=null;
+  function post(syms,prio){return call(function(){return dk().fetch(TV_URL,{provider:"tvscan2",method:"POST",
+    headers:{"Content-Type":"text/plain;charset=UTF-8"},body:JSON.stringify({symbols:{tickers:syms},columns:TV_COLS}),
+    parse:"json",ttl:60000,priority:prio,validate:function(d){return d&&Array.isArray(d.data)?true:"réponse sans tableau data";}});});}
+  function flush(b){
+    var syms=[],seen=dict();
+    b.items.forEach(function(it){it.list.forEach(function(i){var s=tvTicker(i);if(s&&!seen[s]){seen[s]=1;syms.push(s);}});});
+    syms.sort();var chunks=[];for(var k=0;k<syms.length;k+=TV_MAX)chunks.push(syms.slice(k,k+TV_MAX));
+    var prio=b.items.some(function(it){return it.prio==="high";})?"high":b.items.every(function(it){return it.prio==="low";})?"low":undefined;
+    var rows=dict(),failed=dict(),stale=dict();
+    return Promise.all(chunks.map(function(ch){return post(ch,prio).then(function(r){
+        var data=r&&r.data&&Array.isArray(r.data.data)?r.data.data:[];
+        data.forEach(function(x){if(x&&x.s)rows[String(x.s).toUpperCase()]=x;});if(r&&r.stale)ch.forEach(function(s){stale[s]=1;});
+      },function(e){ch.forEach(function(s){failed[s]=e;});log("warn","tvscan2","échec du scanner : "+why(e),{tickers:ch.length});});
+    })).then(function(){b.items.forEach(function(it){
+      var out=[],fail=null,asked=0;
+      it.list.forEach(function(i){var s=tvTicker(i);if(!s)return;asked++;
+        if(failed[s]){fail=failed[s];return;}
+        var row=rows[s];if(!row){log("warn","tvscan2","symbole sans réponse",{symbol:s,id:i.id});return;}
+        var q=tvQuote(i,row,stale[s]);if(q)out.push(q);else log("warn","tvscan2","cours absent dans la réponse",{symbol:s,id:i.id});});
+      if(asked&&fail&&!out.length)it.reject(fail);else it.resolve(out);});});
+  }
+  return {id:"tvscan",label:"TradingView (scanner)",
+    /** Cotations (Promise<Quote[]>). Les appels du même tour de boucle partagent le même POST. */
+    getQuotes:function(list,opts){return new Promise(function(resolve,reject){
+      list=(Array.isArray(list)?list:[]).filter(function(i){if(i&&tvTicker(i))return true;if(i)log("warn","tvscan2","aucun ticker TradingView",{id:i.id});return false;});
+      if(!batch){var b=batch={items:[]};Promise.resolve().then(function(){batch=null;return flush(b);}).catch(function(e){
+        log("error","tvscan2","scanner : "+why(e));b.items.forEach(function(it){it.reject(e);});});}
+      batch.items.push({list:list,prio:opts&&opts.priority,resolve:resolve,reject:reject});});}};
+}
+
+/* ================================================================
+   RobotHistAdapter : historiques quotidiens publiés par le robot GitHub.
+   GET {base}/data/marches-meta.json (une fois) puis {base}/data/hist/{fichier}.json.
+   marches-meta.json (facultatif dans son contenu) : {v|version|updated, files:{"<fichier>":{…}} | ["<fichier>", …]}
+     - absent (404) → robot sans historiques : plus aucun appel pendant la session ;
+     - files présent → seuls les fichiers listés sont demandés ; v/version/updated invalide le cache des fichiers.
+   Fichier : {id, ccy, src, t:[ms], o:[], h:[], l:[], c:[], v:[], div:[[t,montant]], split:[[t,ratio]]}.
+   ================================================================ */
+/** "isin:LU1681043599" → "isin_LU1681043599" (tout caractère hors [A-Za-z0-9_-] devient "_"). */
+function fileOf(id){return String(id||"").replace(/[^A-Za-z0-9_-]/g,"_");}
+function RobotHistAdapter(opts){
+  opts=opts||{};var missing=dict(),metas=dict(),events=dict();
+  function base(){var b=opts.base;if(!b)try{b=CK.cfg&&CK.cfg().data;}catch(e){b="";}return String(b).trim().replace(/\/+$/,"");}
+  /** GET JSON ; null si 404 (mémorisé : l'adresse n'est plus jamais redemandée). */
+  function get(url,validate,key){
+    if(missing[url])return Promise.resolve(null);
+    return call(function(){return dk().fetch(url,{provider:"robotdata",parse:"json",ttl:H6,validate:validate,cacheKey:key,accept:[404]});})
+      .then(function(r){if(r&&r.data===null&&!r.stale){missing[url]=1;log("info","robotdata","fichier absent du robot (mémorisé)",{url:url});return null;}return r?r.data:null;},function(e){if(!is404(e))throw e;missing[url]=1;log("info","robotdata","fichier absent du robot (mémorisé)",{url:url});return null;});
+  }
+  function meta(b){
+    if(!metas[b])metas[b]=get(b+"/data/marches-meta.json",function(d){return d&&typeof d==="object"&&!Array.isArray(d)?true:"marches-meta.json invalide";})
+      .catch(function(e){delete metas[b];log("warn","robotdata","marches-meta.json illisible : "+why(e));return undefined;});
+    return metas[b];
+  }
+  function validHist(d){return d&&Array.isArray(d.t)&&Array.isArray(d.c)&&d.t.length===d.c.length?true:"historique invalide (t et c)";}
+  function toBars(d,instr,o){
+    var ccy=(txt(d.ccy,4)||"").toUpperCase()||instr.currency||null,src=txt(d.src,40)||"robot",from=bound(o.from),to=bound(o.to,true),out=[];
+    var col=function(a,k){return Array.isArray(a)?a[k]:null;};
+    for(var k=0;k<d.t.length;k++){var b=M().normBar({t:d.t[k],o:col(d.o,k),h:col(d.h,k),l:col(d.l,k),c:d.c[k],v:col(d.v,k)},instr.id,ccy,src,"1d");
+      if(b&&inRange(b.timestamp,from,to))out.push(b);}
+    var ev=function(a){return Array.isArray(a)?a.filter(function(x){return Array.isArray(x)&&n(x[0])!=null&&n(x[1])!=null;}).map(function(x){return [n(x[0]),n(x[1])];}):[];};
+    events[instr.id]={div:ev(d.div),split:ev(d.split)};
+    return resample(sortBars(out),o.granularity);
+  }
+  return {id:"robothist",label:"Robot (historiques)",fileOf:fileOf,
+    url:function(instr){var b=base();return b?b+"/data/hist/"+fileOf(instr&&instr.id)+".json":null;},
+    /** Dividendes et divisions du dernier fichier lu pour cet instrument : {div, split} ou null. */
+    events:function(instr){return events[instr&&instr.id||instr]||null;},
+    /** Historique quotidien (Promise<PriceBar[]>), filtré par from/to ; [] si le robot ou le fichier manque. */
+    getHistory:function(instr,o){o=o||{};var b=base();
+      if(!instr||!instr.id)return Promise.resolve([]);
+      if(!b){log("warn","robotdata","adresse du robot absente (réglage data)");return Promise.resolve([]);}
+      var f=fileOf(instr.id),url=b+"/data/hist/"+f+".json";if(missing[url])return Promise.resolve([]);
+      return meta(b).then(function(m){
+        if(m===null)return [];
+        var files=m&&m.files,names=Array.isArray(files)?files:files&&typeof files==="object"?Object.keys(files):null;
+        var listed=!names||names.some(function(x){return x===f||x===f+".json";});
+        if(!listed){log("info","robotdata","pas d'historique publié pour cet instrument",{id:instr.id});return [];}
+        var ver=m&&(m.v||m.version||m.updated);
+        return get(url,validHist,ver!=null?"GET "+url+"#"+ver:undefined).then(function(d){return d?toBars(d,instr,o):[];});
+      });}};
+}
+
+/* ================================================================
+   Crypto : cotations lues dans CK.S (flux OKX existant, puis tickers REST), sans aucun appel réseau ;
+   historique Binance (data-api.binance.vision). N'ouvre aucun WebSocket, n'appelle jamais OKX.
+   ================================================================ */
+function cryptoBase(i){var t=i&&i.tickers||{},s=t.okx?String(t.okx).split("-")[0]:i&&i.symbol||String(i&&i.id||"").replace(/^crypto:/i,"");return (M().cleanText(s,20)||"").toUpperCase();}
+function uniFind(U,b){var lists=Array.isArray(U)?[U]:U?[U.spot,U.perp]:[];
+  for(var k=0;k<lists.length;k++){var a=lists[k];if(Array.isArray(a))for(var j=0;j<a.length;j++)if(a[j]&&a[j].base===b)return a[j];}return null;}
+/** Quote crypto en USDT : S.tick["BTC-USDT"] (flux, delay 0 ; stale si plus de 5 min) sinon S.uni (REST, delay 60). */
+function cryptoQuote(i){
+  var b=cryptoBase(i),S=CK.S||{},T=now(),mq=M().normQuote;if(!b)return null;
+  if(b==="USDT")return mq({instrument_id:i.id,last:1,prev_close:1,change_pct:0,currency:"USDT",ts:T,delay_s:0,source:"Parité"});
+  var t=S.tick&&S.tick[b+"-USDT"];
+  if(t&&n(t.last)>0){var o=n(t.open),ts=n(t.ts);
+    return mq({instrument_id:i.id,last:t.last,open:o,high:t.high,low:t.low,prev_close:o,change_pct:o>0?(n(t.last)/o-1)*100:null,
+      currency:"USDT",ts:ts||T,delay_s:0,source:"OKX (flux)",stale:ts>0&&T-ts>300000});}
+  var u=uniFind(S.uni,b);
+  if(u&&n(u.last)>0){var ch=n(u.chg);
+    return mq({instrument_id:i.id,last:u.last,prev_close:ch!=null&&ch>-100?n(u.last)/(1+ch/100):null,change_pct:ch,value_traded:u.usd,
+      currency:"USDT",ts:T,delay_s:60,source:"OKX"});}
+  return null;
+}
+function binSymbol(i){var t=i&&i.tickers||{};if(t.binance)return String(t.binance).toUpperCase().replace(/[^A-Z0-9]/g,"")||null;var b=cryptoBase(i);return b&&b!=="USDT"?b+"USDT":null;}
+var BIN_IV=dict({"1d":"1d","1w":"1w","1M":"1M"});
+/** Historique Binance en USDT. Seules les bougies CLÔTURÉES (closeTime < maintenant) sont gardées.
+   Horodatage de la barre = closeTime + 1 = instant exact de clôture (la bougie du jour J UTC porte J+1 00:00 UTC ;
+   son jour est models.isoDate(timestamp − 1)). from/to filtrent l'ouverture de la bougie (comme startTime/endTime de Binance).
+   Sans from : les 1000 dernières bougies ; avec from : pagination par startTime (1000 par page, 20 pages au plus). */
+function binHistory(i,o){
+  o=o||{};var sym=binSymbol(i);if(!sym){log("warn","binhist","pas de paire Binance",{id:i&&i.id});return Promise.resolve([]);}
+  var iv=BIN_IV[o.granularity]||"1d",from=bound(o.from),to=bound(o.to,true),T=now(),out=[],pages=0;
+  function page(start){
+    var url=BIN_URL+"?symbol="+encodeURIComponent(sym)+"&interval="+iv+"&limit="+BIN_LIMIT+(start!=null?"&startTime="+start:"")+(to!=null?"&endTime="+to:"");
+    return call(function(){return dk().fetch(url,{provider:"binhist",parse:"json",ttl:36e5,validate:function(d){return Array.isArray(d)?true:"réponse non tableau";}});})
+      .then(function(r){var rows=r&&Array.isArray(r.data)?r.data:[];pages++;
+        rows.forEach(function(k){var ot=n(k&&k[0]),ct=n(k&&k[6]);if(ot==null||ct==null||ct>=T||!inRange(ot,from,to))return;
+          var b=M().normBar({t:ct+1,o:k[1],h:k[2],l:k[3],c:k[4],v:k[5]},i.id,"USDT","Binance",iv);if(b)out.push(b);});
+        var next=rows.length?n(rows[rows.length-1][0])+1:null;
+        if(start!=null&&rows.length>=BIN_LIMIT&&pages<BIN_PAGES&&next>start&&(to==null||next<=to))return page(next);
+        return sortBars(out);});
+  }
+  return page(from);
+}
+
+/* ================================================================
+   Providers (interface MarketDataProvider) et registre CK.mkt
+   ================================================================ */
+var TV=TvScanAdapter(),HIST=RobotHistAdapter();
+var CRYPTO={id:"crypto",label:"Crypto (flux OKX, historique Binance)",classes:["crypto","stablecoin"],
+  getQuotes:function(list){return Promise.resolve((list||[]).map(cryptoQuote).filter(Boolean));},
+  getHistory:function(i,o){return binHistory(i,o);},
+  /** Relit CK.S.tick toutes les 2 s ; onQuote({id:Quote}) reçoit seulement les cotations qui ont changé
+     (cours, variation, plus haut/bas, source, fraîcheur ; horodatage pour le flux seulement : les cotations REST
+     et la parité USDT portent « maintenant » et seraient sinon réémises toutes les 2 s). */
+  subscribe:function(list,onQuote){var alive=true,tid=null,prev=dict();
+    var sig=function(q){return [q.last,q.change_pct,q.high,q.low,q.source,q.stale,q.delay_s===0&&q.source!=="Parité"?q.ts:""].join("|");};
+    function tick(){if(!alive)return;var m={},any=false;
+      try{(list||[]).forEach(function(i){var q=cryptoQuote(i),s=q&&sig(q);if(q&&prev[i.id]!==s){prev[i.id]=s;m[i.id]=q;any=true;}});}
+      catch(e){log("error","crypto","relecture des cotations : "+why(e));}
+      if(any)try{onQuote(m);}catch(e){log("error","crypto","abonné : "+why(e));}
+      if(alive)tid=later(tick,2000);}
+    tick();return function(){alive=false;cancel(tid);tid=null;};},
+  status:function(){var S=CK.S||{},T=now(),last=0;Object.keys(S.tick||{}).forEach(function(k){var t=n(S.tick[k]&&S.tick[k].ts);if(t>last)last=t;});
+    var uni=!!(S.uni&&(Array.isArray(S.uni)?S.uni.length:(S.uni.spot||[]).length||(S.uni.perp||[]).length));
+    var st=last&&T-last<120000?"connectee":uni?"degradee":last?"obsolete":"inactif";
+    return {state:st,label:LBL[st],lastOk:last||null,hist:dkStatus("binhist"),
+      msg:{connectee:"Flux OKX en direct",degradee:"Flux OKX interrompu : cotations REST (60 s)",obsolete:"Flux OKX arrêté",inactif:"Aucune cotation crypto reçue"}[st]};}};
+function tvProvider(id,label,classes){return {id:id,label:label,classes:classes,
+  getQuotes:function(list,o){return TV.getQuotes(list,o);},getHistory:function(i,o){return HIST.getHistory(i,o);},
+  status:function(){return Object.assign({},dkStatus("tvscan2"),{hist:dkStatus("robotdata")});}};}
+
+var PROV=dict(),ORDER=[],LAST=dict();
+function register(p){if(!p||!p.id||typeof p.getQuotes!=="function")throw new Error("provider invalide");if(!PROV[p.id])ORDER.push(p.id);PROV[p.id]=p;return p;}
+[CRYPTO,tvProvider("equity","Actions et ETF (TradingView)",["actions","immobilier_cote"]),tvProvider("index","Indices (TradingView)",["actions"]),
+  tvProvider("commodity","Matières premières (TradingView)",["matieres_premieres","or","argent","energie","petrole","gaz","agricole"]),
+  tvProvider("bond","Obligations et taux (TradingView)",["obligations","oblig_etat","oblig_entreprise"])].forEach(register);
+
+var COMMO=dict({or:1,argent:1,energie:1,petrole:1,gaz:1,agricole:1,matieres_premieres:1});
+var LISTED=dict({titre:1,etf:1,etc_etn:1,fonds:1});
+/** Provider d'un instrument : data_source s'il est enregistré, puis la classe et le véhicule.
+   Un produit coté (ETF, ETN…) sur la crypto avec un ticker TradingView passe par le scanner, pas par le flux OKX. */
+function providerFor(i){
+  if(!i)return null;var c=i.asset_class,v=i.vehicle,listedTv=!!(LISTED[v]&&tvTicker(i));
+  if(i.data_source&&PROV[i.data_source]&&!(i.data_source==="crypto"&&listedTv))return PROV[i.data_source];
+  var id=(c==="crypto"||c==="stablecoin")&&!listedTv?"crypto":v==="indice"?"index":v==="taux"||/^oblig/.test(c||"")?"bond":COMMO[c]?"commodity":"equity";
+  return PROV[id]||PROV.equity||null;
+}
+/** Id ou instrument → instrument (référentiel, sinon "crypto:XXX" et "tv:BOURSE:SYMBOLE" sont reconnus). */
+function resolve(x,quiet){
+  if(!x)return null;if(typeof x==="object")return x.id?x:null;
+  var id=String(x),r=CK.ref&&CK.ref.get?CK.ref.get(id):null;if(r)return r;
+  if(/^crypto:[A-Za-z0-9]+$/.test(id))return M().normInstrument({id:id,symbol:id.slice(7),asset_class:"crypto",vehicle:"spot_crypto"});
+  if(/^tv:[^:]+:.+$/i.test(id))return M().normInstrument({id:id,symbol:id.split(":").pop(),tickers:{tv:id.slice(3)}});
+  if(!quiet)log("warn","mkt","instrument inconnu",{id:id});return null;
+}
+/** Instruments distincts ; out.alias = [[id demandé, id du référentiel]] quand un alias ("tv:…", "isin:…") a été résolu vers un autre id. */
+function resolveAll(xs){var seen=dict(),out=[],alias=[];(Array.isArray(xs)?xs:[xs]).forEach(function(x){var i=resolve(x);if(!i)return;
+  if(typeof x==="string"&&x!==i.id)alias.push([x,i.id]);if(!seen[i.id]){seen[i.id]=1;out.push(i);}});out.alias=alias;return out;}
+/** Recopie chaque cotation sous l'id demandé : quotes(["tv:EURONEXT:CW8"]) donne bien m["tv:EURONEXT:CW8"]. */
+function withAlias(m,alias){(alias||[]).forEach(function(a){if(m[a[1]])m[a[0]]=m[a[1]];});return m;}
+function groups(list){var g=dict(),order=[];list.forEach(function(i){var p=providerFor(i);if(!p)return;if(!g[p.id]){g[p.id]={p:p,list:[]};order.push(p.id);}g[p.id].list.push(i);});return order.map(function(k){return g[k];});}
+function staleLast(id,out){if(LAST[id])out[id]=Object.assign({},LAST[id],{stale:true});}
+
+/** Cotations {id:Quote} ; un appel par provider ; ne rejette jamais (échec → dernières valeurs marquées stale, ou rien). */
+function quotes(xs,opts){return new Promise(function(done){var out={},list=[];
+  try{list=resolveAll(xs);Promise.all(groups(list).map(function(g){
+      return call(function(){return g.p.getQuotes(g.list,opts);}).then(function(qs){var got={};
+        (Array.isArray(qs)?qs:[]).forEach(function(q){if(q&&q.instrument_id){got[q.instrument_id]=1;LAST[q.instrument_id]=out[q.instrument_id]=q;}});
+        g.list.forEach(function(i){if(!got[i.id])staleLast(i.id,out);});
+      },function(e){log("warn",g.p.id,"cotations indisponibles : "+why(e),{n:g.list.length});g.list.forEach(function(i){staleLast(i.id,out);});});
+    })).then(function(){done(withAlias(out,list.alias));},function(){done(withAlias(out,list.alias));});
+  }catch(e){log("error","mkt","cotations : "+why(e));done(withAlias(out,list.alias));}});}
+
+/** Historique PriceBar[] ; ne rejette jamais ([] + journal). */
+function history(x,o){return new Promise(function(done){
+  try{var i=resolve(x),p=i&&providerFor(i);
+    if(!p||typeof p.getHistory!=="function"){log("warn","mkt","historique impossible : instrument ou provider inconnu",{id:i?i.id:String(x)});return done([]);}
+    call(function(){return p.getHistory(i,o||{});}).then(function(b){done(Array.isArray(b)?b:[]);},
+      function(e){log("warn",p.id,"historique indisponible : "+why(e),{id:i.id});done([]);});
+  }catch(e){log("error","mkt","historique : "+why(e));done([]);}});}
+
+/** Abonnement : cb({id:Quote}). Crypto : relecture de CK.S.tick toutes les 2 s ; autres : quotes() toutes les 60 s,
+   seulement si l'onglet est visible (premier rafraîchissement immédiat). Renvoie la fonction de désabonnement. */
+function subscribe(xs,cb){
+  var stops=[],poll=[],alive=true,tid=null,list=[];
+  var give=function(m){if(!alive||!m||!Object.keys(m).length)return;try{cb(withAlias(Object.assign({},m),list.alias));}catch(e){log("error","mkt","abonné : "+why(e));}};
+  var stop=function(){if(!alive)return;alive=false;cancel(tid);tid=null;stops.forEach(function(s){try{s();}catch(e){}});stops=[];};
+  try{list=resolveAll(xs);
+    groups(list).forEach(function(g){
+      if(typeof g.p.subscribe!=="function"){poll=poll.concat(g.list);return;}
+      // un provider en erreur n'empêche pas les autres de s'abonner ; arrêté aussitôt si stop() a déjà eu lieu
+      try{var s=g.p.subscribe(g.list,function(m){if(!alive)return;Object.keys(m||{}).forEach(function(k){LAST[k]=m[k];});give(m);});
+        if(typeof s==="function"){if(alive)stops.push(s);else s();}}catch(e){log("error",g.p.id,"abonnement impossible : "+why(e));}});
+    if(poll.length&&alive){var tick=function(){if(!alive)return;
+        try{if(!hidden())quotes(poll,{priority:"low"}).then(give);}catch(e){log("error","mkt","rafraîchissement : "+why(e));}
+        tid=later(tick,60000);};
+      tick();}
+  }catch(e){log("error","mkt","abonnement : "+why(e));}
+  return stop;
+}
+
+/** Statut d'un provider (id de provider ou d'instrument) ; sans argument : {provider:statut}. */
+function status(id){
+  var st=function(p){try{return p.status();}catch(e){return {state:"inactif",label:LBL.inactif,msg:why(e)};}};
+  if(id==null){var o={};ORDER.forEach(function(k){o[k]=st(PROV[k]);});return o;}
+  var p=PROV[id]||providerFor(resolve(id,true));return p?st(p):{state:"inactif",label:LBL.inactif};
+}
+
+CK.mkt={
+  register:register,providers:function(){return ORDER.map(function(k){return PROV[k];});},providerFor:providerFor,
+  quotes:quotes,history:history,subscribe:subscribe,status:status,
+  last:function(id){if(LAST[id])return LAST[id];var i=resolve(id,true);return i&&LAST[i.id]||null;},
+  TvScanAdapter:TvScanAdapter,RobotHistAdapter:RobotHistAdapter,
+  adapters:function(){return {tv:TV,hist:HIST};},
+  TV_URL:TV_URL,TV_COLS:TV_COLS.slice(),
+  /** Pour les tests : oublie cotations, absences mémorisées et lot TradingView en cours. */
+  _reset:function(){LAST=dict();TV=TvScanAdapter();HIST=RobotHistAdapter();},
+  _t:{tvQuote:tvQuote,tvRow:tvRow,tvDelay:tvDelay,tvTicker:tvTicker,cryptoQuote:cryptoQuote,binHistory:binHistory,binSymbol:binSymbol,fileOf:fileOf,bound:bound,resample:resample}
+};
 })();
 
 /* ================================================================

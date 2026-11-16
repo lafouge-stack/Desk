@@ -39,6 +39,15 @@ Un petit robot GitHub (`robot.mjs`) publie toutes les 10 minutes ce que le navig
 | `ui.js` | Studio, alertes de prix, calculateur de position, palette de commandes (Ctrl+K). |
 | `net.js` | Espace « Connexions » : état en direct de chaque source (liste `SRC`). |
 | `veille.js` | **L'espace « Agent »** : affichage de la lecture du marché écrite par l'agent (`lectureHTML`, `actifCol`, `jauge`, `etat`), mise à jour en direct (`majLive`), lectures précédentes (`histo`), onglets Bilan (`viewBilan`) et Conso IA (`viewConso`), cartes BTC/ETH/SOL/dollar avec graphiques et niveaux (`card`, `cardUSD`, `niveaux`), indicateur TradingView (`PINE_AUTO`). |
+| `models.js` | **Multi-actifs** : arbre des classes d'actifs (`CLASSES`, un enfant n'est autorisé que si son parent est coché), véhicules (`VEHICLES`), modèles (instrument, prix, cotation, compte, position, transaction, préférences) avec normaliseurs qui nettoient tout texte externe, garde-fou unique `CK.allow` (+ `CK.allow.why` pour le motif), référentiel `CK.ref`, phrase `CK.DISCLAIMER`. Les JSON éditables arrivent dans `CK.DATA` (marqueurs `"@@REFERENTIEL@@"`, `"@@ALLOCATION@@"`, `"@@FISCAL@@"` remplacés par `build.mjs`). |
+| `datakit.js` | Réseau des nouveaux modules `CK.dk` : `fetch` (limiteur et budget par source, cache, nouvel essai, disjoncteur, onglet caché, option `accept` pour un code attendu comme le 404), `ws` (WebSocket avec reconnexion), `idb` (IndexedDB avec repli mémoire), `status`, `log`/`logs`. N'est PAS utilisé par le code crypto existant. |
+| `fx.js` | Conversion en euros `CK.fx` (fixings BCE via Frankfurter, taux du jour, report du dernier fixing, GBX = pence, USDT ≈ USD). |
+| `calendars.js` | Séances et jours fériés `CK.cal` (Euronext, Xetra, NYSE, crypto), calculés par règle (Pâques…), heure d'été gérée. |
+| `pea.js` | Éligibilité PEA et PEA-PME `CK.pea` : `status`, `pmeStatus`, `allowedIn` (ce qu'un compte accepte), corrections de l'utilisateur (`setOverride`, `exportOverrides`), `alternatives`. |
+| `providers.js` | Sources de marché `CK.mkt` : `quotes`, `history`, `subscribe`, `status`. Cotations via le scanner TradingView (un seul POST groupé, `?label-product=desk-marches`, au plus 4 par minute, rien si l'onglet est caché, pause si le crypto a reçu un 429), crypto lue dans le flux OKX existant, historiques du robot et de Binance. |
+| `referentiel.json` | **Les instruments suivis** (ETF, actions, indices, taux, devises, crypto) avec ISIN, tickers TradingView/Yahoo, classe, zone d'exposition, statut PEA + source + date. Tous vérifiés le 16/11/2026 (tickers, ISIN, devises). |
+| `allocation.json` | Poches, profils d'exemple (poids, volatilité cible), pondérations des scores, seuils du screener mensuel, coûts par type de compte, séries de référence. |
+| `fiscal.json` | Règles fiscales indicatives datées et sourcées (PFU, prélèvements sociaux 18,6 % en 2026, PEA 5 ans, PEA-PME, assurance-vie, crypto). |
 | `vmkit.mjs` | Kit de test : charge les fichiers du navigateur dans Node (faux `window`, `document`, `localStorage`, minuteries qui ne tournent pas). Fournit aussi des bougies de test déterministes (`candles`). |
 | `*.test.mjs` | Tests automatiques (`node --test "*.test.mjs"`, aucune installation). `golden-chop.test.mjs` + `golden-chop.json` : valeurs de référence du screener crypto (CHOP, RSI, ATR %, metrics), à ne jamais régénérer sans raison. `build.test.mjs` : le build réussit et contient tous les fichiers. |
 | `.github/workflows/tests.yml` | Lance les tests à chaque envoi sur GitHub. Séparé du robot : un test en échec ne bloque jamais la publication des news. Vérifie aussi que `index.html` a bien été reconstruit avant l'envoi. |
@@ -87,8 +96,8 @@ Le Desk évolue vers une plateforme multi-actifs pour un investisseur français 
 
 | Phase | Contenu | État |
 |---|---|---|
-| 0 | Outillage : Node, tests (`vmkit.mjs`, golden), workflow de tests, `serve.mjs`, corrections Studio et accueil, dépôt GitHub personnel | en cours |
-| 1 | Socle de données : `models.js`, `datakit.js`, `fx.js`, `calendars.js`, `pea.js`, `providers.js`, `referentiel.json`, `allocation.json`, `fiscal.json` | à faire |
+| 0 | Outillage : Node, tests (`vmkit.mjs`, golden), workflow de tests, `serve.mjs`, corrections Studio et accueil, dépôt GitHub personnel | fait |
+| 1 | Socle de données : `models.js`, `datakit.js`, `fx.js`, `calendars.js`, `pea.js`, `providers.js`, `referentiel.json`, `allocation.json`, `fiscal.json` | fait (à valider) |
 | 2 | Espace « Marchés » (touche 8) | à faire |
 | 3 | Historiques publiés par le robot (branche `donnees`) | à faire |
 | 4 | Espace « Portefeuille » (touche 9) | à faire |
@@ -106,6 +115,13 @@ Décisions qui s'appliquent à tout le chantier :
 - **Vocabulaire** : « Proposition du mois selon tes règles », jamais « conseil ». Le disclaimer exact est visible partout : « Les informations affichées ne constituent pas un conseil en investissement personnalisé. Les performances passées ne préjugent pas des performances futures. »
 - **Licence** : usage personnel ; garder la mention « Captain Trading » ; ne jamais proposer cette version dans une offre payante sans accord écrit de Captain Trading.
 - Nouveaux espaces ajoutés **après** Connexions (touches 8 et 9), pour ne pas renuméroter les touches existantes.
+
+**Recettes multi-actifs**
+- *Corriger le statut PEA d'un ETF* : dans `referentiel.json`, mettre `pea_eligibility_status` à `eligible` ou `not_eligible` **avec** `pea_source` (adresse de la fiche justETF, du DIC ou de l'émetteur) et `pea_last_checked_at` (date). Sans source, le statut est ignoré. Ne jamais marquer un fonds éligible sans source. Les actions gardent `unknown` : la règle (société UE/EEE) décide.
+- *Ajouter un instrument* : copier une ligne du même type dans `referentiel.json`, vérifier le ticker TradingView (il doit répondre au scanner avec le bon ISIN) et le ticker Yahoo, puis `node build.mjs` et `node --test "*.test.mjs"` (`referentiel.test.mjs` contrôle chaque ligne).
+- *Changer un profil ou les poids des scores* : `allocation.json` (chaque profil doit totaliser 100).
+- *Mettre à jour la fiscalité* : `fiscal.json` (taux, date d'effet, source, statut V/A).
+- Les tests qui chargent plusieurs fichiers dans `vmkit.mjs` : les tableaux créés « dans » le contexte ont un autre prototype ; écrire `assert.deepEqual([...x], …)`.
 
 ## Recettes courantes
 
