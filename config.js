@@ -13,8 +13,9 @@ window.COCKPIT_CONFIG = {
   watchlist: ["BTC", "ETH", "SOL"], // cryptos suivies dans la barre du haut
   modules: {                     // false = module masqué
     day: true, map: true, events: true, deriv: true, liq: true, movers: true, screener: true, news: true,
-    levels: true, opts: true, book: true, corr: true, net: true, veille: true
+    levels: true, opts: true, book: true, corr: true, net: true, veille: true, mkbandeau: true, mktable: true
   },
+  marches: { gaz: false },       // espace Marchés : gaz: true ajoute le gaz naturel au bandeau
   layout: null,                  // disposition des blocs (réglée avec le bouton « Disposition »)
   moversMarket: "spot",          // top mouvements par défaut : "spot" ou "perp"
   moversMinVolume: 2000000,      // volume 24h minimum (en $) pour apparaître dans les tops

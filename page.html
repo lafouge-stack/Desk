@@ -80,6 +80,16 @@
     <div class="card net-card" id="net"></div>
   </section>
 
+  <section class="mod" data-mod="mkbandeau">
+    <header class="mhd"><span class="mno"></span><h2>Marchés en un coup d'œil</h2><span class="meta" id="mkStripMeta"></span></header>
+    <div class="card"><div class="mk-strip" id="mkStrip"></div></div>
+  </section>
+
+  <section class="mod" data-mod="mktable">
+    <header class="mhd"><span class="mno"></span><h2>Marchés</h2><span class="meta" id="mkMeta"></span></header>
+    <div class="card"><div class="mk-main" id="mkMain"></div></div>
+  </section>
+
   <section class="mod" data-mod="levels">
     <header class="mhd"><span class="mno"></span><h2>Niveaux clés</h2><span class="meta">OKX · jour, semaine, mois, sessions</span></header>
     <div class="card"><div class="lv" id="levels"></div></div>
@@ -204,9 +214,10 @@
 <footer class="foot">
   <span id="footBrand">Captain Trading · Desk</span>
   <span class="sep">·</span>
-  <span>Données : OKX, Binance, Bybit, TradingView, FinancialJuice, alternative.me</span>
+  <span>Données : OKX, Binance, Bybit, TradingView, BCE, FinancialJuice, alternative.me</span>
   <span class="sep">·</span>
   <span id="wsState">Connexion…</span>
+  <p class="foot-disc">Les informations affichées ne constituent pas un conseil en investissement personnalisé. Les performances passées ne préjugent pas des performances futures.</p>
 </footer>
 
 <!-- ========== Fenêtres ========== -->
@@ -214,6 +225,13 @@
   <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="chartTitle">
     <div class="mh"><h3 id="chartTitle">Graphique</h3><a class="btn sm" id="chartLink" target="_blank" rel="noopener">Ouvrir sur TradingView</a><button type="button" class="x" data-close aria-label="Fermer">×</button></div>
     <div class="chartbox" id="chartBox"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovMk" data-nofocus hidden>
+  <div class="modal wide mk-fm" role="dialog" aria-modal="true" aria-labelledby="mkfTitle">
+    <div class="mh"><h3 id="mkfTitle">Fiche</h3><button type="button" class="x" data-close aria-label="Fermer">×</button></div>
+    <div class="mb mk-fb" id="mkfBody"></div>
   </div>
 </div>
 

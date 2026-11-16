@@ -17,7 +17,8 @@ var W0=[
   {v:"liq",name:"Liquidations",key:"4",col:"#F07384",desc:"Qui se fait liquider, et où sont les aimants de prix."},
   {v:"news",name:"News",key:"5",col:"#A99BEA",desc:"Toutes les news en direct : tweets, Trump, macro, crypto, en français."},
   {v:"veille",name:"Agent",key:"6",col:"#B8F36B",desc:"Une lecture du marché toutes les 30 min : niveaux, scénarios et bilan."},
-  {v:"net",name:"Connexions",key:"7",col:"#5FD3C6",desc:"L'état de chaque source de données, en direct."}
+  {v:"net",name:"Connexions",key:"7",col:"#5FD3C6",desc:"L'état de chaque source de données, en direct."},
+  {v:"marches",name:"Marchés",key:"8",col:"#62B6FF",desc:"Indices, actions, ETF, taux, matières premières et devises, avec l'éligibilité PEA."}
 ];
 /* Espaces décochés dans le Studio : retirés de l'accueil ; les raccourcis clavier suivent l'ordre restant */
 var W=W0.filter(function(w){var e=(CK.cfg&&CK.cfg().espaces)||{};return e[w.v]!==false;});W.forEach(function(w,i){w.key=String(i+1);});
@@ -44,7 +45,7 @@ function D(){
   var sess=CK.day&&CK.day.sessions?CK.day.sessions():[],ph=CK.day&&CK.day.paris?CK.day.paris():new Date().getHours();
   var up=(S.cal||[]).filter(function(e){return e.ts>now-600000;}).slice(0,6);
   return {now:now,F:F,fav:fav,def:def,neu:neu,rows:rows,setups:mt?+mt[1]:null,preset:pn,L:L,Sh:Sh,big:big,bigs:bigs,bk:bk,items:items,recent:recent,ev:S.nextEv,
-    sess:sess,ph:ph,cal:S.cal||[],up:up,mg:S.liqMagnets,
+    sess:sess,ph:ph,cal:S.cal||[],up:up,mg:S.liqMagnets,mk:CK.mk&&CK.mk.home?CK.mk.home():{items:[]},
     hotLiq:!!(big&&big.usd>=1e6&&now-big.ts<300000),hotEv:!!(S.nextEv&&S.nextEv.ts>now&&S.nextEv.ts-now<9e5)};
 }
 /* Prochains rendez-vous de la journée : sessions + annonces, triés */
@@ -124,11 +125,23 @@ ART.veille=function(d,tips){
   return s;};
 ART.net=function(d,tips){
   var sm=CK.netSummary?CK.netSummary():{list:[]},C={ok:"var(--up)",warn:"var(--warn)",down:"var(--down)",idle:"var(--faint)"},s="";
-  sm.list.forEach(function(x,i){var c=i%5,r=Math.floor(i/5),cx=40+c*80,cy=36+r*60,col=C[x.st.k];
+  var nc=sm.list.length>20?6:5,nr=Math.max(1,Math.ceil(sm.list.length/nc)),dx=400/nc,dy=Math.min(60,236/nr);
+  sm.list.forEach(function(x,i){var c=i%nc,r=Math.floor(i/nc),cx=dx/2+c*dx,cy=30+r*dy,col=C[x.st.k];
     var tt=tips?T(tipHead(x.s.name,esc(x.s.p),col)+tipRow("État",esc(x.st.l),x.st.k==="ok"?"up":x.st.k==="down"?"down":"")+"<span class=\"tx\">"+esc(x.st.d)+"</span><span class=\"ta\">Clic : ouvrir Connexions</span>","net:"+x.s.id):"";
-    s+="<g class=\"hv\""+tt+">"+(tips?"<rect class=\"hit\" x=\""+(cx-38)+"\" y=\""+(cy-24)+"\" width=\"76\" height=\"56\"/>":"")+
+    s+="<g class=\"hv\""+tt+">"+(tips?"<rect class=\"hit\" x=\""+(cx-dx/2+2)+"\" y=\""+(cy-dy/2+4)+"\" width=\""+(dx-4)+"\" height=\""+(dy-4)+"\"/>":"")+
       "<circle cx=\""+cx+"\" cy=\""+cy+"\" r=\"12\" style=\"fill:"+col+";opacity:.18\"/><circle cx=\""+cx+"\" cy=\""+cy+"\" r=\"6\" style=\"fill:"+col+"\"/>"+
       "<text class=\"lb sm\" x=\""+cx+"\" y=\""+(cy+26)+"\">"+esc(x.s.name.split(" ")[0])+"</text></g>";});
+  return s;};
+/* Marchés : variation du jour des repères du bandeau (lecture du cache, aucun appel réseau) */
+ART.marches=function(d,tips){
+  var h=d.mk||{items:[]},L=h.items,s='<line class="mid" x1="200" y1="14" x2="200" y2="250"/>',mx=0;L.forEach(function(x){if(x.c!=null)mx=Math.max(mx,Math.abs(x.c));});mx=Math.max(mx,1);
+  var step=Math.min(24,236/Math.max(1,L.length));
+  L.forEach(function(x,i){var y=24+i*step,w=x.c==null?0:Math.abs(x.c)/mx*120,up=x.c!=null&&x.c>=0;
+    var tt=tips?T(tipHead(x.n,"",up?"var(--up)":"var(--down)")+tipRow("Cours",esc(x.px))+tipRow("Jour",esc(x.txt),x.c==null?"":up?"up":"down")+'<span class="ta">Clic : ouvrir la fiche</span>',"mk:"+x.id):"";
+    s+='<g class="hv"'+tt+'>'+(tips?'<rect class="hit" x="10" y="'+f1(y-step/2)+'" width="380" height="'+f1(step)+'"/>':"")+
+      '<text class="lb sm '+(up?"ar":"al")+'" x="'+(up?194:206)+'" y="'+f1(y+4)+'">'+esc(x.n)+'</text>'+
+      (w>0?'<rect x="'+f1(up?200:200-w)+'" y="'+f1(y-5)+'" width="'+f1(Math.max(2,w))+'" height="10" rx="3" style="fill:var(--'+(up?"up":"down")+');opacity:.85"/>':"")+
+      '<text class="lb sm '+(up?"al":"ar")+(x.c==null?"":up?" up":" down")+'" x="'+f1(up?206+w:194-w)+'" y="'+f1(y+4)+'">'+esc(x.txt)+'</text></g>';});
   return s;};
 function art(i,d,tips){return '<svg class="w-art" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'+ART[W[i].v](d,tips)+'</svg>';}
 
@@ -142,6 +155,8 @@ function stats(i,d){
     case "liq":var t=d.L+d.Sh;return [[t?u.usd(t):"—","liquidés en 1 h",d.hotLiq?"down":""],[t?Math.round(d.L/t*100)+" %":"—","de longs"],[d.big?u.usd(d.big.usd):"—",d.big?"plus grosse · "+d.big.base:"plus grosse"]];
     case "news":var f=d.items[0];return [[f&&f.ts?u.ago(f.ts):"—","dernière news"],[String(d.recent),"dans l'heure"],["FinancialJuice","source"]];
     case "veille":var vs=CK.veille?CK.veille.state():{msgs:[],att:[]},lm=vs.msgs[vs.msgs.length-1];return [[vs.active?(vs.busy?"Réfléchit":"Active"):"Inactive","agent IA",vs.active?"up":""],[String(vs.att.length),"lectures aujourd'hui"],[lm?u.parisTime(lm.ts):"—","dernière lecture"]];
+    case "marches":var it=d.mk.items,ca=it[0]||{},sp=it[1]||{},eu=d.mk.euronext;
+      return [[ca.txt||"—","CAC 40",ca.c>0?"up":ca.c<0?"down":""],[sp.txt||"—","S&P 500",sp.c>0?"up":sp.c<0?"down":""],[eu?eu.label:"—","Euronext",eu&&eu.open?"up":""]];
     case "net":var sm=CK.netSummary?CK.netSummary():{ok:0,warn:0,down:0};return [[sm.ok+"/"+(sm.list||[]).length,"sources actives","up"],[String(sm.warn),"à surveiller",sm.warn?"warn":""],[String(sm.down),"en panne",sm.down?"down":""]];
   }return [];
 }
@@ -155,6 +170,8 @@ function insights(i,d){
     case "veille":var vs2=CK.veille?CK.veille.state():{msgs:[]};if(!vs2.active)return [["◷","Connexion à l'agent…",""]];return vs2.msgs.slice(-3).reverse().map(function(m){return [m.importance>=2?"!":"●","<b>"+esc(m.actif)+"</b> · "+esc(m.titre),m.importance>=2?"warn":""];}).concat(vs2.msgs.length?[]:[["◷","Première lecture du marché en préparation",""]]);
     case "net":var L2=(CK.netSummary?CK.netSummary().list:[]).filter(function(x){return x.st.k==="down"||x.st.k==="warn";}).slice(0,3);
       return L2.length?L2.map(function(x){return [x.st.k==="down"?"✕":"!","<b>"+esc(x.s.name)+"</b> · "+esc(x.st.l),x.st.k==="down"?"down":"warn"];}):[["✓","Toutes les sources répondent","up"]];
+    case "marches":var mv=d.mk.items.filter(function(x){return x.c!=null;}).sort(function(a,b){return Math.abs(b.c)-Math.abs(a.c);}).slice(0,3);
+      return mv.length?mv.map(function(x){return [x.c>=0?"▲":"▼","<b>"+esc(x.n)+"</b> · "+esc(x.px)+" · "+esc(x.txt),x.c>=0?"up":"down"];}):[["◷","Ouvre l'espace pour charger les cours",""]];
     case "news":return d.items.slice(0,3).map(function(x){return ["◆",'<b>'+(x.ts?u.ago(x.ts):"")+'</b> · '+esc((x.title||"").slice(0,80))+((x.title||"").length>80?"…":""),""];});
   }return [];
 }
@@ -175,6 +192,7 @@ function build(){
       '<div class="ln-art" id="lnArt"><span class="ln-art-h">Survole pour les détails · clic pour agir</span></div></div>'+
     '<div class="ln-row" id="lnRow" role="listbox" aria-label="Mondes"><i class="ln-glow" aria-hidden="true"></i></div>'+
     '<div class="ln-hint"><kbd>←</kbd><kbd>→</kbd> naviguer <i></i><kbd>↵</kbd> ouvrir <i></i><kbd>1</kbd>–<kbd>'+W.length+'</kbd> accès direct <i></i><kbd>Échap</kbd> accueil</div>'+
+    '<p class="ln-disc">'+esc(CK.DISCLAIMER||"")+'</p>'+
     '<div class="ln-tip" id="lnTip" role="tooltip"></div>';
   grid.parentNode.insertBefore(ln,grid);
   var row=u.$("lnRow");glow=row.querySelector(".ln-glow");tip=u.$("lnTip");heroBox=u.$("lnHero");
@@ -236,6 +254,7 @@ function act(a){
   if(k==="chart"&&CK.openChart)CK.openChart("OKX:"+v+"USDT.P",v);
   else if(k==="link")window.open(v,"_blank","noopener");
   else if(k==="net"){var ni=idxOf("net");if(ni>=0)enter(ni);}
+  else if(k==="mk"){var mi=idxOf("marches");if(mi<0)return;enter(mi);setTimeout(function(){if(CK.mk)CK.mk.fiche(v);},700);}
   else if(k==="sig"){var si=idxOf("macro");if(si<0)return;enter(si);setTimeout(function(){var el=document.querySelector('#sigList .sg[data-k="'+v+'"]');if(el)el.click();},700);}
 }
 

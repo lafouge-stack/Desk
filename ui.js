@@ -150,10 +150,15 @@ function cmds(){return [
   
   {t:"Alertes",k:"prix",run:function(){$("btnAlerts").click();}},{t:"Calculateur de position",k:"risque",run:function(){$("btnCalc").click();}},
   {t:"Relancer le screener",k:"scan",run:function(){CK.runScan();}},
+].concat(CK.mk&&CK.layout&&CK.layout.catalog().some(function(v){return v.id==="marches";})&&(CK.cfg().espaces||{}).marches!==false?CK.mk.TABS.map(function(t){return {t:"Aller à Marchés · "+t.label,k:"marchés",run:function(){CK.mk.open(t.id);}};}):[]).concat([
   {t:(CK.cfg().beginner?"Désactiver":"Activer")+" le mode débutant",k:"aide",run:function(){var C=CK.merge(CK.cfg(),{beginner:!CK.cfg().beginner});CK.setCfg(C,true);CK.applyIdentity();}}
-];}
+]);}
 function renderPal(){var q=$("palIn").value.trim(),ql=q.toLowerCase();palItems=cmds().filter(function(c){return !ql||(c.t+" "+c.k).toLowerCase().indexOf(ql)>=0;});
+  /* Fiche d'un instrument du référentiel (nom, symbole ou ISIN) */
+  var fiches=[],exact=false,QU=q.toUpperCase();if(q.length>=2&&CK.ref&&CK.mk){fiches=CK.ref.search(q).filter(function(i){return i.vehicle!=="spot_crypto";}).slice(0,5).map(function(i){if(i.symbol===QU||i.isin===QU)exact=true;return {t:"Fiche "+i.symbol+" · "+i.name,k:"marchés"+(i.isin?" · "+i.isin:""),run:function(){CK.mk.fiche(i.id);}};});}
   if(/^[a-z0-9]{2,10}$/i.test(q)){var b=q.toUpperCase();palItems.unshift({t:"Graphique "+b+"/USDT",k:"OKX",run:function(){CK.openChart("OKX:"+b+"USDT",b);}});}
+  /* symbole ou ISIN exact : la fiche passe devant ; sinon le graphique crypto reste le premier choix (SOL + Entrée) */
+  if(fiches.length)palItems=exact||!/^[a-z0-9]{2,10}$/i.test(q)?fiches.concat(palItems):palItems.slice(0,1).concat(fiches,palItems.slice(1));
   palSel=Math.min(palSel,Math.max(0,palItems.length-1));
   $("palList").innerHTML=palItems.map(function(c,i){return '<div class="pi'+(i===palSel?" on":"")+'" data-i="'+i+'" role="option">'+esc(c.t)+'<small>'+esc(c.k)+'</small></div>';}).join("")||'<div class="empty">Aucune commande.</div>';}
 function runPal(i){var c=palItems[i];if(!c)return;CK.closeOv($("ovPalette"));setTimeout(c.run,60);}

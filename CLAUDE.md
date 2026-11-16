@@ -37,7 +37,8 @@ Un petit robot GitHub (`robot.mjs`) publie toutes les 10 minutes ce que le navig
 | `extra.js` | Niveaux clés, options Deribit, carnet d'ordres agrégé, alertes flash des news, corrélations. |
 | `screener.js` | Screener (préréglages dans `PRESETS`, colonnes dans `COLS`). |
 | `ui.js` | Studio, alertes de prix, calculateur de position, palette de commandes (Ctrl+K). |
-| `net.js` | Espace « Connexions » : état en direct de chaque source (liste `SRC`). |
+| `net.js` | Espace « Connexions » : état en direct de chaque source (liste `SRC`, destinations `DEST`). |
+| `markets.js` | **L'espace « Marchés »** (touche 8) `CK.mk` : bandeau (`STRIP`), onglets (`TABS`, `tabOf`, `groupOf`), tableau (`COLS`, `rowHTML`), filtre PEA (`peaPass`), écarts de taux (`SPREADS`), fiche instrument (`ficheHTML`, `peaBlock`, correction PEA), notes par onglet (`NOTES`). Se charge à la première ouverture de l'espace (`CK.onView`) : un seul abonnement `CK.mkt` (1 appel groupé par minute), arrêté quand on quitte l'espace. L'accueil lit seulement le cache (`CK.mk.home`). |
 | `veille.js` | **L'espace « Agent »** : affichage de la lecture du marché écrite par l'agent (`lectureHTML`, `actifCol`, `jauge`, `etat`), mise à jour en direct (`majLive`), lectures précédentes (`histo`), onglets Bilan (`viewBilan`) et Conso IA (`viewConso`), cartes BTC/ETH/SOL/dollar avec graphiques et niveaux (`card`, `cardUSD`, `niveaux`), indicateur TradingView (`PINE_AUTO`). |
 | `models.js` | **Multi-actifs** : arbre des classes d'actifs (`CLASSES`, un enfant n'est autorisé que si son parent est coché), véhicules (`VEHICLES`), modèles (instrument, prix, cotation, compte, position, transaction, préférences) avec normaliseurs qui nettoient tout texte externe, garde-fou unique `CK.allow` (+ `CK.allow.why` pour le motif), référentiel `CK.ref`, phrase `CK.DISCLAIMER`. Les JSON éditables arrivent dans `CK.DATA` (marqueurs `"@@REFERENTIEL@@"`, `"@@ALLOCATION@@"`, `"@@FISCAL@@"` remplacés par `build.mjs`). |
 | `datakit.js` | Réseau des nouveaux modules `CK.dk` : `fetch` (limiteur et budget par source, cache, nouvel essai, disjoncteur, onglet caché, option `accept` pour un code attendu comme le 404), `ws` (WebSocket avec reconnexion), `idb` (IndexedDB avec repli mémoire), `status`, `log`/`logs`. N'est PAS utilisé par le code crypto existant. |
@@ -97,8 +98,8 @@ Le Desk évolue vers une plateforme multi-actifs pour un investisseur français 
 | Phase | Contenu | État |
 |---|---|---|
 | 0 | Outillage : Node, tests (`vmkit.mjs`, golden), workflow de tests, `serve.mjs`, corrections Studio et accueil, dépôt GitHub personnel | fait |
-| 1 | Socle de données : `models.js`, `datakit.js`, `fx.js`, `calendars.js`, `pea.js`, `providers.js`, `referentiel.json`, `allocation.json`, `fiscal.json` | fait (à valider) |
-| 2 | Espace « Marchés » (touche 8) | à faire |
+| 1 | Socle de données : `models.js`, `datakit.js`, `fx.js`, `calendars.js`, `pea.js`, `providers.js`, `referentiel.json`, `allocation.json`, `fiscal.json` | fait |
+| 2 | Espace « Marchés » (touche 8) : bandeau, 6 onglets, fiche instrument, badges et correction PEA, état de la source, avertissement partout, Ctrl+K, `#marches/etf` | fait (à valider) |
 | 3 | Historiques publiés par le robot (branche `donnees`) | à faire |
 | 4 | Espace « Portefeuille » (touche 9) | à faire |
 | 5 | Préférences d'investissement + allocation mensuelle | à faire |
@@ -118,6 +119,9 @@ Décisions qui s'appliquent à tout le chantier :
 
 **Recettes multi-actifs**
 - *Corriger le statut PEA d'un ETF* : dans `referentiel.json`, mettre `pea_eligibility_status` à `eligible` ou `not_eligible` **avec** `pea_source` (adresse de la fiche justETF, du DIC ou de l'émetteur) et `pea_last_checked_at` (date). Sans source, le statut est ignoré. Ne jamais marquer un fonds éligible sans source. Les actions gardent `unknown` : la règle (société UE/EEE) décide.
+- *Changer le bandeau des Marchés* : liste `STRIP` dans `markets.js` (identifiants du référentiel, ex. `tv:EURONEXT:PX1`). Le gaz naturel s'affiche avec `marches: { gaz: true }` dans `config.js`.
+- *Changer l'onglet d'un instrument* : `tabOf` et `groupOf` dans `markets.js` (l'onglet dépend de la classe et du véhicule du référentiel).
+- *Nouvel espace chargé à la demande* : `CK.onView("id", function(ouvert){…})` (dans `layout.js`) appelle la fonction avec `true` à chaque entrée dans l'espace et `false` à la sortie.
 - *Ajouter un instrument* : copier une ligne du même type dans `referentiel.json`, vérifier le ticker TradingView (il doit répondre au scanner avec le bon ISIN) et le ticker Yahoo, puis `node build.mjs` et `node --test "*.test.mjs"` (`referentiel.test.mjs` contrôle chaque ligne).
 - *Changer un profil ou les poids des scores* : `allocation.json` (chaque profil doit totaliser 100).
 - *Mettre à jour la fiscalité* : `fiscal.json` (taux, date d'effet, source, statut V/A).
