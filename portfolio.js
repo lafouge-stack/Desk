@@ -1,7 +1,7 @@
 /* ================================================================
    COCKPIT — Espace « Portefeuille » (phase 4) : CK.pf
    Synthèse (valeur, plus-value prix / change, jour, espèces, comptes), onglets Positions ·
-   Opérations · Répartition · Risques · Comptes, fenêtres de saisie, import CSV / sauvegarde.
+   Opérations · Répartition · Allocation (allocui.js, proposition du mois) · Risques · Comptes, fenêtres de saisie, import CSV / sauvegarde.
    Le portefeuille reste dans ce navigateur (CK.pfc) : jamais envoyé sur internet.
    Rien n'est chargé avant la première ouverture de l'espace : cotations seulement des lignes
    détenues (un abonnement CK.mkt, arrêté à la sortie), historiques seulement dans l'onglet Risques.
@@ -37,7 +37,7 @@ function accType(t){var l=(M().ACCOUNT_TYPES||[]).filter(function(x){return x.id
 var ACC_SHORT={PEA:"PEA",PEA_PME:"PEA-PME",CTO:"CTO",assurance_vie:"AV",crypto_wallet:"Crypto",bank_account:"Banque",other:"Autre"};
 
 /* ---------- Onglets ---------- */
-var TABS=[{id:"positions",label:"Positions"},{id:"operations",label:"Opérations"},{id:"repartition",label:"Répartition"},{id:"risques",label:"Risques"},{id:"comptes",label:"Comptes"}];
+var TABS=[{id:"positions",label:"Positions"},{id:"operations",label:"Opérations"},{id:"repartition",label:"Répartition"},{id:"allocation",label:"Allocation"},{id:"risques",label:"Risques"},{id:"comptes",label:"Comptes"}];
 var TAB_IDS=TABS.map(function(t){return t.id;});
 var PEAF=[{id:"tous",label:"Tous"},{id:"eligibles",label:"Éligibles PEA"},{id:"verifier",label:"+ à vérifier"}];
 var PEA_UI={eligible:["ok","PEA"],eligible_regle:["rule","PEA (règle)"],not_eligible:["no","Non PEA"],unknown:["unk","À vérifier"]};
@@ -74,6 +74,7 @@ function resumeHTML(P,V,o){
     '<button type="button" class="btn sm" data-pf="add-acc">+ Compte</button>'+
     '<button type="button" class="btn sm" data-pf="import">Importer</button>'+
     '<button type="button" class="btn sm" data-pf="export">Sauvegarder</button>'+
+    '<button type="button" class="btn sm" data-pf="al-prefs" title="Classes d\'actifs autorisées, profil, PEA, versement, limites">Mes règles</button>'+
     '<button type="button" class="btn sm" data-pf="hide" aria-pressed="'+(h?"true":"false")+'" title="Pour partager ton écran sans montrer tes montants">'+(h?"Afficher les montants":"Masquer les montants")+'</button></div>';
   return (demo?'<div class="pf-banner info"><b>Exemple</b> : ces comptes sont fictifs, pour découvrir l\'espace. <button type="button" class="btn sm" data-pf="undemo">Retirer l\'exemple</button></div>':'')+
     backupHTML(P,o)+head+accs+acts+
@@ -437,6 +438,7 @@ function act(a,id,el){
     case "unpick":unpick(el);return;
     case "custom":showCustom(el);return;
     case "fiche":closeModal();if(CK.mk&&CK.mk.fiche)setTimeout(function(){CK.mk.fiche(id);},220);return;
+    default:if(CK.alui&&CK.alui.act(a,id,S,V()))return;
   }
 }
 function delAcc(id){
@@ -553,9 +555,10 @@ function paint(){
   var pf=peaF(),fa=accF?S.accounts.filter(function(a){return a.id===accF;})[0]:null;
   set("pfFlt",(fa?'<button type="button" class="chip" data-pf="accall" title="Afficher tous les comptes">'+esc(fa.name)+' ×</button>':'')+
     (tab==="positions"?'<span class="seg" role="group" aria-label="Filtre PEA">'+PEAF.map(function(p){return '<button type="button" data-pf="peaf" data-id="'+p.id+'" aria-pressed="'+(p.id===pf?"true":"false")+'">'+esc(p.label)+'</button>';}).join("")+'</span>':''));
-  set("pfChecks",S.accounts.length&&tab!=="comptes"?checksHTML(ck.filter(function(c){return c.level!=="info"&&(!accF||!c.account_id||c.account_id===accF);}),4):"");
+  set("pfChecks",S.accounts.length&&tab!=="comptes"&&tab!=="allocation"?checksHTML(ck.filter(function(c){return c.level!=="info"&&(!accF||!c.account_id||c.account_id===accF);}),4):"");
   var body="";
-  if(!S.accounts.length)body='<p class="mk-note">Crée un compte, importe un fichier ou charge l\'exemple depuis le bloc du dessus.</p>';
+  if(tab==="allocation"&&CK.alui){CK.alui.ensure(S,v,schedule);body=CK.alui.html(S,v,{hide:h});}
+  else if(!S.accounts.length)body='<p class="mk-note">Crée un compte, importe un fichier ou charge l\'exemple depuis le bloc du dessus.</p>';
   else if(tab==="positions")body=positionsHTML(v,{hide:h,acc:accF,peaf:pf});
   else if(tab==="operations")body=opsHTML(S,{hide:h,acc:accF,errors:v.errors});
   else if(tab==="repartition")body=repartHTML(v,{hide:h});
@@ -599,7 +602,8 @@ function open(t){if(t&&TAB_IDS.indexOf(t)>=0){tab=t;lsSet("pf:tab",t);}if(CK.lay
 function fromHash(){var h=typeof location!=="undefined"?String(location.hash||""):"",m=/^#portefeuille(?:\/([a-z]+))?$/.exec(h);if(!m)return;open(m[1]);}
 
 CK.pf={
-  boot:function(){if(CK.onView)CK.onView("portefeuille",onView);fromHash();if(typeof window!=="undefined"&&window.addEventListener)window.addEventListener("hashchange",fromHash);},
+  boot:function(){if(CK.onView)CK.onView("portefeuille",onView);
+    CK.onPrefs=function(){if(built)schedule();if(CK.worlds&&CK.worlds.refresh)try{CK.worlds.refresh();}catch(e){}};fromHash();if(typeof window!=="undefined"&&window.addEventListener)window.addEventListener("hashchange",fromHash);},
   open:open,home:home,start:start,stop:stop,TABS:TABS,
   add:function(){open();setTimeout(function(){act("add-pos");},300);},
   importer:function(){open();setTimeout(function(){act("import");},300);},
@@ -608,6 +612,6 @@ CK.pf={
     donutSVG:donutSVG,accForm:accForm,posForm:posForm,txForm:txForm,importPreviewHTML:importPreviewHTML,jsonPreviewHTML:jsonPreviewHTML,positionsCSV:positionsCSV,
     suggest:suggest,sugHTML:sugHTML,peaPass:peaPass,backupHTML:backupHTML,money:money,heldIds:heldIds,
     setQ:function(m){Q=dict();Object.keys(m||{}).forEach(function(k){Q[k]=m[k];});},setRes:function(r){RES=r||dict();},
-    reset:function(){stop();P=null;Q=dict();RES=dict();tab="positions";accF=null;built=false;fxAsked=false;robotTs=0;seen=false;RISK={key:"",res:null,busy:false,ts:0};IMP=null;}}
+    reset:function(){stop();if(CK.alui&&CK.alui.reset)CK.alui.reset();P=null;Q=dict();RES=dict();tab="positions";accF=null;built=false;fxAsked=false;robotTs=0;seen=false;RISK={key:"",res:null,busy:false,ts:0};IMP=null;}}
 };
 })();

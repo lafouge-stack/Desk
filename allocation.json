@@ -19,54 +19,82 @@
     "prudent": {
       "label": "Prudent",
       "poids": { "actions_etf": 22, "actions_titres": 3, "obligations": 40, "or": 7, "argent": 0, "petrole": 0, "gaz": 0, "matieres_premieres": 3, "agricole": 0, "immobilier_cote": 0, "crypto": 0, "liquidites": 25 },
-      "vol_cible": 5, "inclinaison_max": 0.15, "max_titres_vifs": 5, "risque_max_sri": 4
+      "vol_cible": 5,
+      "inclinaison_max": 0.15,
+      "max_titres_vifs": 5,
+      "risque_max_sri": 4
     },
     "modere": {
       "label": "Modéré",
       "poids": { "actions_etf": 40, "actions_titres": 8, "obligations": 25, "or": 7, "argent": 1, "petrole": 1, "gaz": 0, "matieres_premieres": 3, "agricole": 0, "immobilier_cote": 0, "crypto": 3, "liquidites": 12 },
-      "vol_cible": 8, "inclinaison_max": 0.25, "max_titres_vifs": 15, "risque_max_sri": 5
+      "vol_cible": 8,
+      "inclinaison_max": 0.25,
+      "max_titres_vifs": 15,
+      "risque_max_sri": 5
     },
     "dynamique": {
       "label": "Dynamique",
       "poids": { "actions_etf": 52, "actions_titres": 15, "obligations": 10, "or": 6, "argent": 2, "petrole": 2, "gaz": 0, "matieres_premieres": 2, "agricole": 0, "immobilier_cote": 0, "crypto": 7, "liquidites": 4 },
-      "vol_cible": 12, "inclinaison_max": 0.35, "max_titres_vifs": 25, "risque_max_sri": 6
+      "vol_cible": 12,
+      "inclinaison_max": 0.35,
+      "max_titres_vifs": 25,
+      "risque_max_sri": 6
     },
     "agressif": {
       "label": "Agressif",
       "poids": { "actions_etf": 50, "actions_titres": 22, "obligations": 0, "or": 5, "argent": 2, "petrole": 3, "gaz": 0, "matieres_premieres": 1, "agricole": 0, "immobilier_cote": 0, "crypto": 15, "liquidites": 2 },
-      "vol_cible": 18, "inclinaison_max": 0.5, "max_titres_vifs": 35, "risque_max_sri": 7
+      "vol_cible": 18,
+      "inclinaison_max": 0.5,
+      "max_titres_vifs": 35,
+      "risque_max_sri": 7
     }
   },
   "horizons": {
     "_doc": "Part des poches risquées conservée selon l'horizon (le reste glisse vers obligations puis liquidités, si elles sont cochées).",
     "court": { "label": "Court terme (< 2 ans)", "facteur_risque": 0.6 },
     "moyen": { "label": "Moyen terme (2 à 5 ans)", "facteur_risque": 0.85 },
-    "long": { "label": "Long terme (> 5 ans)", "facteur_risque": 1.0 }
+    "long": { "label": "Long terme (> 5 ans)", "facteur_risque": 1 }
   },
   "score_rotation": {
     "_doc": "Pondérations du score de rotation d'une classe (série temporelle, 5 ans). Total 100.",
-    "momentum_ajuste": 35, "tendance": 25, "drawdown": 15, "volatilite_inverse": 15, "diversification": 10
+    "momentum_ajuste": 35,
+    "tendance": 25,
+    "drawdown": 15,
+    "volatilite_inverse": 15,
+    "diversification": 10
   },
   "MSCREEN_WEIGHTS": {
     "_doc": "Pondérations du score global du screener mensuel. Total 100.",
-    "momentum": 30, "tendance": 25, "risque": 15, "volatilite": 15, "diversification": 15
+    "momentum": 30,
+    "tendance": 25,
+    "risque": 15,
+    "volatilite": 15,
+    "diversification": 15
   },
-  "screener_seuils": {
-    "renforcer_score_min": 70, "renforcer_tendance_min": 75, "reduire_score_max": 40, "reduire_tendance_max": 25,
-    "conserver_score_min": 50, "rsi_surachat": 75, "rsi_survente": 25
-  },
+  "screener_seuils": { "renforcer_score_min": 70, "renforcer_tendance_min": 75, "reduire_score_max": 40, "reduire_tendance_max": 25, "conserver_score_min": 50, "rsi_surachat": 75, "rsi_survente": 25 },
   "regime": {
-    "_doc": "Détection du régime de marché à partir de l'indice actions de référence et du VIX.",
-    "indice_reference": "isin:LU1681043599", "vix_haut": 25, "vix_tres_haut": 35, "percentile_vol_haute": 80,
-    "transfert_risk_off_pct": 30
+    "_doc": "Régime de marché à la date de décision, à partir de l'indice actions de référence (cours vs moyenne 200 j), du VIX et du percentile de la volatilité 60 j sur 3 ans. Transfert : part des poches risquées déplacée vers liquidités, obligations et or (seulement s'ils sont cochés) en risk-off ou haute volatilité.",
+    "indice_reference": "isin:LU1681043599",
+    "vix_haut": 25,
+    "vix_tres_haut": 35,
+    "percentile_vol_haute": 80,
+    "transfert_risk_off_pct": 30,
+    "vix": "tv:TVC:VIX"
   },
   "selection": {
     "instruments_par_poche_max": 3,
-    "etf_encours_min_eur": 50000000, "etf_spread_max_bps": 30, "action_valeur_echangee_min_eur": 500000,
-    "donnees_max_seances": 5, "historique_min_seances": 252, "historique_min_seances_monetaire": 60,
+    "etf_encours_min_eur": 50000000,
+    "etf_spread_max_bps": 30,
+    "action_valeur_echangee_min_eur": 500000,
+    "donnees_max_seances": 5,
+    "historique_min_seances": 252,
+    "historique_min_seances_monetaire": 60,
     "liquidites_par_enveloppe": "especes_du_compte",
     "liquidites_pea_doc": "Dans un PEA ou un PEA-PME, la poche Liquidités est logée en espèces du compte (cash_balance). Un ETF monétaire n'y est proposé que si son statut PEA est confirmé par une source (EPEA : sources contradictoires au 16/11/2026, donc « à vérifier »).",
-    "liste_blanche_liquidites_pea": ["isin:IE000I4R3252"]
+    "liste_blanche_liquidites_pea": ["isin:IE000I4R3252"],
+    "ordre_min_eur": 50,
+    "cryptos_proposees": ["crypto:BTC", "crypto:ETH", "crypto:SOL"],
+    "donnees_max_jours": 7
   },
   "couts": {
     "_doc": "Coûts estimés par type de compte : courtage en points de base (1 bp = 0,01 %), minimum par ordre en €, frais de change pour un titre hors EUR. Ajuste-les à ton courtier.",
@@ -81,14 +109,18 @@
     "slippage_bps": 5
   },
   "proxies": {
-    "_doc": "Série historique longue utilisée pour mesurer chaque poche (backtest, scores). type TR = rendement total (dividendes inclus) ; PR = indice de prix (interdit au backtest) ; future_continu = interdit. a_verifier = ticker à confirmer en phase 3.",
-    "actions_etf": { "yahoo": "CW8.PA", "type": "TR", "devise": "EUR", "debut": "2009-04-01", "a_verifier": false },
-    "actions_titres": { "yahoo": "CW8.PA", "type": "TR", "devise": "EUR", "debut": "2009-04-01", "a_verifier": false },
-    "obligations": { "yahoo": "IEGA.AS", "type": "TR", "devise": "EUR", "debut": null, "a_verifier": true },
-    "or": { "yahoo": "4GLD.DE", "type": "TR", "devise": "EUR", "debut": null, "a_verifier": true },
-    "argent": { "yahoo": "PHAG.L", "type": "TR", "devise": "USD", "debut": null, "a_verifier": true },
-    "petrole": { "yahoo": "BRNT.L", "type": "TR", "devise": "USD", "debut": null, "a_verifier": true },
-    "crypto": { "yahoo": "BTC-EUR", "type": "TR", "devise": "EUR", "debut": "2014-09-17", "a_verifier": true },
-    "liquidites": { "taux": "ECB:EST.B.EU000A2X2A25.WT", "type": "taux", "devise": "EUR", "debut": "2019-10-01", "avant": "EONIA - 8,5 bp", "a_verifier": false }
+    "_doc": "Série historique (identifiant du référentiel, publiée par le robot ou lue chez Binance) qui mesure chaque poche : scores, régime, volatilité, corrélations. type TR = rendement total (dividendes inclus, seul admis) ; spot = cours d'un métal physique (sans revenu, admis) ; null = aucune série fiable : la poche garde son poids de profil, sans inclinaison, confiance faible.",
+    "actions_etf": { "id": "isin:LU1681043599", "type": "TR", "label": "ETF MSCI World (CW8)" },
+    "actions_titres": { "id": "isin:LU1681043599", "type": "TR", "label": "ETF MSCI World (CW8), faute d'indice de titres en direct" },
+    "obligations": { "id": "isin:IE00B4WXJJ64", "type": "TR", "label": "ETF obligations d'État zone euro (IEGA)" },
+    "or": { "id": "isin:IE00B4ND3602", "type": "TR", "label": "ETC or physique (IGLN, converti en euros)" },
+    "argent": { "id": null, "type": null, "label": "aucune série fiable (ETC coupé avant 2026, contrat à terme refusé)" },
+    "petrole": { "id": "isin:JE00B78CGV99", "type": "TR", "label": "ETC Brent (BRNT)" },
+    "gaz": { "id": null, "type": null, "label": "aucune série fiable (ETC coupé avant 2026, contrat à terme refusé)" },
+    "matieres_premieres": { "id": "isin:IE00BDFL4P12", "type": "TR", "label": "ETF panier de matières premières (ICOM)" },
+    "agricole": { "id": "isin:GB00B15KYH63", "type": "TR", "label": "ETC agriculture (AIGAP)" },
+    "immobilier_cote": { "id": null, "type": null, "label": "aucun ETF immobilier dans le référentiel" },
+    "crypto": { "id": "crypto:BTC", "type": "TR", "label": "Bitcoin (Binance, converti en euros)", "jours_par_an": 365 },
+    "liquidites": { "id": null, "type": "cash", "label": "espèces : volatilité nulle, jamais inclinées" }
   }
 }

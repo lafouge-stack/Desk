@@ -298,7 +298,8 @@ function defaultPrefs(){
   return {v:1,saved:false,classes:classes,vehicles:vehicles,pea_mode:"off",pea_filter:"tous",risk_profile:"modere",horizon:"long",
     monthly_contribution_eur:0,contribution_split:{},
     limits:{max_par_classe:{},max_par_instrument:20,max_crypto:10,min_liquidites:0,max_turnover_mensuel:20,bande_inaction_pp:2,risque_max_sri:null,levier_autorise:false},
-    filters:{regions:[],devises:[],secteurs:[]},fiscal:{pfu_par_defaut:true,tmi:null}};
+    filters:{regions:[],devises:[],secteurs:[]},fiscal:{pfu_par_defaut:true,tmi:null},
+    poches_exclues:[],poids_perso:null};
 }
 function pct(v,lo,hi,def){v=num(v);return v==null?def:Math.min(hi,Math.max(lo,v));}
 function normPrefs(raw){
@@ -319,7 +320,12 @@ function normPrefs(raw){
       levier_autorise:L.levier_autorise===true},
     filters:{regions:arr((r.filters||{}).regions,function(x){return REG_IDS.indexOf(x)>=0;}),devises:arr((r.filters||{}).devises,function(x){return typeof x==="string"&&/^[A-Z]{3}$/.test(x);}),
       secteurs:arr((r.filters||{}).secteurs,function(x){return typeof x==="string"&&x.length<60;}).map(function(x){return cleanText(x,60);})},
-    fiscal:{pfu_par_defaut:(r.fiscal||{}).pfu_par_defaut!==false,tmi:pct((r.fiscal||{}).tmi,0,45,null)}};
+    fiscal:{pfu_par_defaut:(r.fiscal||{}).pfu_par_defaut!==false,tmi:pct((r.fiscal||{}).tmi,0,45,null)},
+    // poches de l'allocation que tu écartes (ex. « matieres_premieres » pour garder l'or sans le panier) ; identifiants courts seulement
+    poches_exclues:arr(r.poches_exclues,function(x){return typeof x==="string"&&/^[a-z_]{2,30}$/.test(x)&&!BAD_KEYS[x];}),
+    // poids personnalisés {poche: %} à la place de ceux du profil (null = poids du profil)
+    poids_perso:(function(pp){if(!pp||typeof pp!=="object"||Array.isArray(pp))return null;var o={},n=0;
+      Object.keys(pp).slice(0,30).forEach(function(k){if(/^[a-z_]{2,30}$/.test(k)&&!BAD_KEYS[k]){o[k]=pct(pp[k],0,100,0);n++;}});return n?o:null;})(r.poids_perso)};
 }
 
 /* ---------- Garde-fou unique : un instrument hors des classes ou véhicules cochés n'est JAMAIS proposé ----------
