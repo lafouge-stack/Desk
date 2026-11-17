@@ -38,7 +38,7 @@ window.COCKPIT_CONFIG = {
   watchlist: ["BTC", "ETH", "SOL"], // cryptos suivies dans la barre du haut
   modules: {                     // false = module masqué
     day: true, map: true, events: true, deriv: true, liq: true, movers: true, screener: true, news: true,
-    levels: true, opts: true, book: true, corr: true, net: true, veille: true, mkbandeau: true, mktable: true, pfresume: true, pfmain: true
+    levels: true, opts: true, book: true, corr: true, net: true, veille: true, mkbandeau: true, mktable: true, pfresume: true, pfmain: true, msmain: true
   },
   marches: { gaz: false },       // espace Marchés : gaz: true ajoute le gaz naturel au bandeau
   layout: null,                  // disposition des blocs (réglée avec le bouton « Disposition »)
@@ -2540,6 +2540,71 @@ tr.pf-err td{opacity:.7}tr.pf-err td:first-child{box-shadow:inset 3px 0 0 var(--
   .al-br{grid-template-columns:minmax(80px,110px) 1fr 54px;gap:6px}}
 @container (max-width:480px){.al-table th:nth-child(4),.al-table td:nth-child(4){display:none}.al-ord li{grid-template-columns:60px 1fr auto}.al-ord .al-nm{display:none}}
 @media (max-width:600px){.pr-tree,.pr-chips,.pr-profs,.pr-radios,.pr-wgrid{grid-template-columns:1fr}.pr-cl.d1{padding-left:18px}.pr-cl.d2{padding-left:36px}}
+
+/* ================================================================
+   Phase 6 — Screener mensuel multi-actifs (ms-)
+   ================================================================ */
+/* bascule : en mode mensuel, le screener crypto est masqué (pas modifié) ; sinon le bloc mensuel est masqué */
+body[data-scrmode="mensuel"] .mod[data-mod="screener"],body:not([data-scrmode="mensuel"]) .mod[data-mod="msmain"]{display:none!important}
+.ms-mode{flex:0 0 auto}.ms-mode button{white-space:nowrap}
+.mhd .ms-mode{margin-left:auto}.mhd .ms-mode+.meta{margin-left:10px}
+.ms-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:10px;margin:0 0 10px}
+.ms-head h3{margin:0;font:600 16px var(--font);color:var(--text)}.ms-head p{margin:3px 0 0;font:500 12px/1.45 var(--font);color:var(--muted)}
+.ms-acts{display:flex;gap:8px;flex-wrap:wrap}
+.ms-bar{display:flex;flex-direction:column;gap:8px;margin:0 0 10px}
+.ms-bar .seg{flex-wrap:wrap}.ms-bar .seg em{font-style:normal;opacity:.6;font-size:.9em}
+.ms-bar2{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ms-chk{display:flex;align-items:center;gap:6px;font:500 12.5px var(--font);color:var(--text);cursor:pointer}
+.ms-chk input{accent-color:var(--wc,var(--accent))}
+.ms-q{height:32px;padding:0 10px;border:0;border-radius:8px;background:var(--solid);box-shadow:inset 0 0 0 1px var(--line-2);color:var(--text);font:500 13px var(--font);min-width:0;flex:1 1 160px;max-width:260px}
+.ms-table td{vertical-align:middle}
+.ms-sort{all:unset;cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit}.ms-sort.on{color:var(--text)}
+.ms-sort:focus-visible{outline:2px solid var(--wc,var(--accent));outline-offset:2px;border-radius:3px}
+.ms-sc{display:inline-block;min-width:34px;padding:2px 6px;border-radius:6px;text-align:center;font:600 12px var(--mono);color:var(--text);
+  background:linear-gradient(90deg,color-mix(in oklab,var(--wc,var(--accent)) 30%,transparent) calc(var(--v)*1%),var(--solid) 0)}
+.ms-sc.ms-na{background:none;color:var(--faint)}
+.ms-chop{white-space:nowrap}.ms-chop em{display:block;font:500 10.5px var(--font);color:var(--faint);font-style:normal}
+.ms-held{font-style:normal;color:var(--wc,var(--accent));font-size:9px;vertical-align:middle}
+.ms-ex{white-space:normal!important;min-width:180px;font:500 12px/1.4 var(--font);color:var(--muted)}
+.ms-lbl{display:inline-block;padding:2px 8px;border-radius:6px;font:600 11px var(--font);white-space:nowrap;background:var(--solid);box-shadow:inset 0 0 0 1px var(--line-2);color:var(--text)}
+.ms-up{box-shadow:inset 3px 0 0 var(--up),inset 0 0 0 1px var(--line-2)}.ms-down{box-shadow:inset 3px 0 0 var(--down),inset 0 0 0 1px var(--line-2)}
+.ms-sw,.ms-watch{box-shadow:inset 3px 0 0 var(--warn),inset 0 0 0 1px var(--line-2)}.ms-out,.ms-none{color:var(--faint)}
+.ms-row.on td{background:color-mix(in oklab,var(--wc,var(--accent)) 8%,transparent)}
+.flow .ms-det td,.ms-det td{padding:0 0 4px;white-space:normal}
+.ms-detb{padding:12px 14px;border-radius:0 0 10px 10px;background:color-mix(in oklab,var(--wc,var(--accent)) 5%,var(--solid))}
+.ms-subs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 14px;margin:0 0 12px}
+.ms-subs div{display:grid;grid-template-columns:1fr 34px;align-items:center;gap:3px 8px}
+.ms-subs em{grid-column:1/-1;font:500 11.5px var(--font);color:var(--muted);font-style:normal}
+.ms-subs i{display:block;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--wc,var(--accent)) calc(var(--v)*1%),var(--line-2) 0)}
+.ms-subs b{font:600 12px var(--mono);text-align:right}
+.ms-kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 16px}
+.ms-kv div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ms-kv em{font:500 11px var(--font);color:var(--faint);font-style:normal}.ms-kv b{font:600 12.5px var(--font);color:var(--text)}
+.ms-why{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 4px;font:500 12.5px/1.5 var(--font);color:var(--text)}
+.ms-meth ul{margin:8px 0;padding-left:18px;font:500 12.5px/1.55 var(--font);color:var(--text)}.ms-meth p{font:500 12.5px/1.55 var(--font);color:var(--muted)}
+@container (max-width:900px){.ms-table th:nth-child(11),.ms-table td:nth-child(11){display:none}}
+@container (max-width:700px){.ms-table th:nth-child(n+3):nth-child(-n+8),.ms-table td:nth-child(n+3):nth-child(-n+8){display:none}}
+@container (max-width:480px){.ms-table th:nth-child(9),.ms-table td:nth-child(9){display:none}.ms-table .mk-nm span{display:none}}
+@container (max-width:480px){.ms-table td.ms-ex{display:none}}
+@media (max-width:600px){.mhd .ms-mode button{padding:0 8px;font-size:11px}}
+/* screener mensuel : conteneur mesuré, tableau qui défile, colonnes masquées sur écran étroit (préfixe .flow : l'emporte sur .flow .scan) */
+.mod[data-mod="msmain"] .card{container-type:inline-size}
+.ms-body .tbl-wrap{overflow-x:auto}
+.ms-table thead th{position:static}
+.flow .ms-table td,.ms-table td{padding:9px 8px;font-size:13px}
+.flow .ms-table th,.ms-table th{padding:9px 8px}
+.ms-kv{grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),1fr))}
+.ms-subs{grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr))}
+@container (max-width:900px){.flow .ms-table th:nth-child(11),.flow .ms-table td:nth-child(11){display:none}}
+@container (max-width:700px){.flow .ms-table th:nth-child(n+3):nth-child(-n+8),.flow .ms-table td:nth-child(n+3):nth-child(-n+8){display:none}}
+@container (max-width:480px){.flow .ms-table th:nth-child(9),.flow .ms-table td:nth-child(9){display:none}.flow .ms-table .mk-nm span{display:none}}
+@container (max-width:700px){.flow .ms-det td{display:table-cell!important}}
+/* les règles étroites du screener crypto (.scan, colonnes 4 à 13) ne s'appliquent pas au tableau mensuel : on rétablit, puis on masque les nôtres */
+.flow .ms-table th,.flow .ms-table td{display:table-cell}
+@container (max-width:900px){.flow .ms-table th:nth-child(11),.flow .ms-table td:nth-child(11){display:none}}
+@container (max-width:700px){.flow .ms-table th:nth-child(n+3):nth-child(-n+8),.flow .ms-table td:nth-child(n+3):nth-child(-n+8){display:none}}
+@container (max-width:480px){.flow .ms-table th:nth-child(9),.flow .ms-table td:nth-child(9){display:none}}
+.flow .ms-table tr.ms-det>td{display:table-cell}
 </style>
 <script>
 /* ================================================================
@@ -2559,7 +2624,7 @@ CK.reduce = reduce;
 var DEF = {
   id:"captain", name:"captain", tagline:"Trading · Desk", data:"", accent:"#FF8A3D", theme:"dark", beginner:false,
   watchlist:["BTC","ETH","SOL"],
-  modules:{day:true,map:true,events:true,deriv:true,liq:true,movers:true,screener:true,news:true,levels:true,opts:true,book:true,corr:true,net:true,veille:true,mkbandeau:true,mktable:true,pfresume:true,pfmain:true},
+  modules:{day:true,map:true,events:true,deriv:true,liq:true,movers:true,screener:true,news:true,levels:true,opts:true,book:true,corr:true,net:true,veille:true,mkbandeau:true,mktable:true,pfresume:true,pfmain:true,msmain:true},
   layout:null,
   espaces:{journee:true,macro:true,screener:true,liq:true,news:true,veille:true,net:true,marches:true,portefeuille:true},   // false = espace masqué (accueil, navigation, raccourcis)
   moversMarket:"spot", moversMinVolume:2000000, liqMin:25000,
@@ -2693,7 +2758,7 @@ function applyIdentity(){
   var fav=document.querySelector('link[rel="icon"]');if(!fav){fav=document.createElement("link");fav.rel="icon";fav.type="image/png";fav.href=LOGO.fav;document.head.appendChild(fav);}
   document.body.classList.toggle("beginner",!!C.beginner);
   /* Un bloc disparaît aussi si son espace est décoché dans le Studio (ex. Screener) */
-  var ESPM={day:"journee",events:"journee",map:"macro",screener:"screener",liq:"liq",deriv:"liq",movers:"liq",news:"news",veille:"veille",net:"net",mkbandeau:"marches",mktable:"marches",pfresume:"portefeuille",pfmain:"portefeuille"},E=C.espaces||{};
+  var ESPM={day:"journee",events:"journee",map:"macro",screener:"screener",liq:"liq",deriv:"liq",movers:"liq",news:"news",veille:"veille",net:"net",mkbandeau:"marches",mktable:"marches",pfresume:"portefeuille",pfmain:"portefeuille",msmain:"screener"},E=C.espaces||{};
   Object.keys(DEF.modules).forEach(function(k){var on=(!C.modules||C.modules[k]!==false)&&!(ESPM[k]&&E[ESPM[k]]===false);document.querySelectorAll('[data-mod="'+k+'"]').forEach(function(el){el.hidden=!on;});});
   if(CK.layout)CK.layout.refresh();
 }
@@ -3310,7 +3375,7 @@ function safe(fn){try{fn();}catch(e){if(window.console)console.error("[cockpit]"
 CK.boot=function(){
   applyIdentity();syncThemeBtns();buildStrip();wire();
   S.moversMkt=C.moversMarket;S.newsLang=C.newsLang;
-  [function(){if(CK.bg)CK.bg.boot();},function(){if(CK.layout)CK.layout.boot();},function(){if(CK.day)CK.day.boot();},function(){if(CK.map)CK.map.boot();},function(){if(CK.liqmap)CK.liqmap.boot();},function(){if(CK.pos)CK.pos.boot();},function(){if(CK.extra)CK.extra.boot();},function(){if(CK.veille)CK.veille.boot();},function(){if(CK.screener)CK.screener.boot();},function(){if(CK.ui)CK.ui.boot();},function(){if(CK.hub)CK.hub.boot();},function(){if(CK.worlds)CK.worlds.boot();},function(){if(CK.sound)CK.sound.boot();},function(){if(CK.net)CK.net.boot();},function(){if(CK.mk)CK.mk.boot();},function(){if(CK.pf)CK.pf.boot();}].forEach(safe);
+  [function(){if(CK.bg)CK.bg.boot();},function(){if(CK.layout)CK.layout.boot();},function(){if(CK.day)CK.day.boot();},function(){if(CK.map)CK.map.boot();},function(){if(CK.liqmap)CK.liqmap.boot();},function(){if(CK.pos)CK.pos.boot();},function(){if(CK.extra)CK.extra.boot();},function(){if(CK.veille)CK.veille.boot();},function(){if(CK.screener)CK.screener.boot();},function(){if(CK.ui)CK.ui.boot();},function(){if(CK.hub)CK.hub.boot();},function(){if(CK.worlds)CK.worlds.boot();},function(){if(CK.sound)CK.sound.boot();},function(){if(CK.net)CK.net.boot();},function(){if(CK.mk)CK.mk.boot();},function(){if(CK.pf)CK.pf.boot();},function(){if(CK.msui)CK.msui.boot();}].forEach(safe);
   renderLiqSum();renderNews();
   loadInstruments().then(function(){startSockets();seedLiq();});
   loadMacro();
@@ -4954,11 +5019,22 @@ function summary(t,c,perYear,diff){
     mdd1y:diff?null:maxDD(t,c,T-365*DAY,T),mdd5y:!diff&&t[0]<=minusMonths(T,60)?maxDD(t,c,minusMonths(T,60),T):null,
     hi52:r?r.hi:null,lo52:r?r.lo:null,n:t.length,first:ymd(t[0]),spark:weekly(t,c,52,T).map(function(x){return x[1];})};
 }
+/**
+ * Clôtures « dividendes réinvestis » (rendement total) : chaque dividende [t, montant] (même devise que les cours, date de
+ * détachement) est réinvesti ce jour-là, au facteur 1 + montant / clôture de la veille. Rien ne change avant sa date
+ * (point-in-time). Sans dividende : copie des clôtures.
+ */
+function totalReturn(t,c,div){
+  var out=c.slice();if(!Array.isArray(div)||!div.length)return out;
+  var ev=div.filter(function(d){return Array.isArray(d)&&fin(d[0])&&fin(d[1])&&d[1]>0;}).sort(function(a,b){return a[0]-b[0];}),f=1,j=0;
+  for(var k=0;k<t.length;k++){while(j<ev.length&&ev[j][0]<=t[k]){if(k>0&&c[k-1]>0)f*=1+ev[j][1]/c[k-1];j++;}out[k]=c[k]*f;}
+  return out;
+}
 /** Arrondi à `sig` chiffres significatifs (fichiers plus légers, précision largement suffisante). */
 function round(v,sig){if(!fin(v)||v===0)return v;var p=Math.pow(10,(sig||6)-Math.ceil(Math.log10(Math.abs(v))));return Math.round(v*p)/p;}
 
 CK.ind={idxAt:idxAt,ymd:ymd,minusMonths:minusMonths,ret:ret,perfs:perfs,PERIODS:PERIODS,annualize:annualize,logRets:logRets,
-  vol:vol,maxDD:maxDD,weekly:weekly,range52:range52,summary:summary,round:round};
+  vol:vol,maxDD:maxDD,weekly:weekly,range52:range52,summary:summary,round:round,totalReturn:totalReturn};
 })();
 
 /* ================================================================
@@ -5047,7 +5123,7 @@ var DEFAULTS={
   home:[],
   journee:[{id:"day",x:0,y:0,w:12,h:33},{id:"levels",x:0,y:33,w:5,h:50},{id:"opts",x:5,y:33,w:7,h:50},{id:"events",x:0,y:83,w:7,h:50},{id:"deriv",x:7,y:83,w:5,h:34}],
   macro:[{id:"map",x:0,y:0,w:12,h:82},{id:"corr",x:0,y:82,w:12,h:40}],
-  screener:[{id:"screener",x:0,y:0,w:12,h:84},{id:"movers",x:0,y:84,w:12,h:40}],
+  screener:[{id:"screener",x:0,y:0,w:12,h:84},{id:"msmain",x:0,y:84,w:12,h:84},{id:"movers",x:0,y:168,w:12,h:40}],
   liq:[{id:"liq",x:0,y:0,w:8,h:84},{id:"book",x:8,y:0,w:4,h:84},{id:"deriv",x:0,y:84,w:12,h:50}],
   news:[{id:"news",x:0,y:0,w:8,h:84},{id:"events",x:8,y:0,w:4,h:84}],
   net:[{id:"net",x:0,y:0,w:12,h:84}],
@@ -5057,9 +5133,9 @@ var DEFAULTS={
 };
 /* Où mène « Ouvrir » depuis un bloc */
 var DOOR={day:"journee",map:"macro",events:"journee",screener:"screener",liq:"liq",deriv:"liq",movers:"liq",news:"news"};
-var LAYV="9";
-var MIN={pfresume:[6,24],pfmain:[6,50],mkbandeau:[6,18],mktable:[6,40],veille:[6,40],corr:[3,30],levels:[3,30],opts:[3,30],book:[3,30],net:[6,40],day:[6,28],map:[3,36],events:[2,24],deriv:[3,16],movers:[3,26],liq:[3,40],news:[3,24],screener:[3,36]};
-var NAMES={pfresume:"Synthèse du portefeuille",pfmain:"Positions, répartition et risques",mkbandeau:"Bandeau des marchés",mktable:"Tableau des marchés",veille:"Agent de veille",corr:"Corrélations du BTC",levels:"Niveaux clés",opts:"Options Deribit",book:"Carnet d'ordres agrégé",net:"Connexions",day:"Journée de trading",map:"Signaux",events:"Agenda éco",deriv:"Dérivés",liq:"Liquidations",movers:"Top mouvements",screener:"Screener",news:"News"};
+var LAYV="10";
+var MIN={msmain:[6,40],pfresume:[6,24],pfmain:[6,50],mkbandeau:[6,18],mktable:[6,40],veille:[6,40],corr:[3,30],levels:[3,30],opts:[3,30],book:[3,30],net:[6,40],day:[6,28],map:[3,36],events:[2,24],deriv:[3,16],movers:[3,26],liq:[3,40],news:[3,24],screener:[3,36]};
+var NAMES={msmain:"Screener mensuel multi-actifs",pfresume:"Synthèse du portefeuille",pfmain:"Positions, répartition et risques",mkbandeau:"Bandeau des marchés",mktable:"Tableau des marchés",veille:"Agent de veille",corr:"Corrélations du BTC",levels:"Niveaux clés",opts:"Options Deribit",book:"Carnet d'ordres agrégé",net:"Connexions",day:"Journée de trading",map:"Signaux",events:"Agenda éco",deriv:"Dérivés",liq:"Liquidations",movers:"Top mouvements",screener:"Screener",news:"News"};
 var grid,all={},view="home",lay=[],editing=false,stacked=false,ph=null;
 var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -6473,7 +6549,8 @@ function cmds(){return [
 ].concat(CK.mk&&CK.layout&&CK.layout.catalog().some(function(v){return v.id==="marches";})&&(CK.cfg().espaces||{}).marches!==false?CK.mk.TABS.map(function(t){return {t:"Aller à Marchés · "+t.label,k:"marchés",run:function(){CK.mk.open(t.id);}};}):[]).concat(CK.pf&&CK.layout&&CK.layout.catalog().some(function(v){return v.id==="portefeuille";})&&(CK.cfg().espaces||{}).portefeuille!==false?CK.pf.TABS.map(function(t){return {t:"Aller à Portefeuille · "+t.label,k:"portefeuille",run:function(){CK.pf.open(t.id);}};}).concat([
   {t:"Ajouter une position",k:"portefeuille",run:function(){CK.pf.add();}},{t:"Importer un fichier de courtier (CSV)",k:"portefeuille",run:function(){CK.pf.importer();}},
   {t:"Proposition du mois selon tes règles (Allocation)",k:"portefeuille",run:function(){CK.pf.open("allocation");}},
-  {t:"Mes règles d'investissement (préférences)",k:"portefeuille",run:function(){if(CK.prefs)CK.prefs.open();}}]):[]).concat([
+  {t:"Mes règles d'investissement (préférences)",k:"portefeuille",run:function(){if(CK.prefs)CK.prefs.open();}},
+  {t:"Screener mensuel multi-actifs",k:"screener",run:function(){if(CK.msui)CK.msui.open();}}]):[]).concat([
   {t:(CK.cfg().beginner?"Désactiver":"Activer")+" le mode débutant",k:"aide",run:function(){var C=CK.merge(CK.cfg(),{beginner:!CK.cfg().beginner});CK.setCfg(C,true);CK.applyIdentity();}}
 ]);}
 function renderPal(){var q=$("palIn").value.trim(),ql=q.toLowerCase();palItems=cmds().filter(function(c){return !ql||(c.t+" "+c.k).toLowerCase().indexOf(ql)>=0;});
@@ -6517,7 +6594,7 @@ var DEST=[
   {id:"bandeau",name:"Bandeau & alertes",sub:"prix, alertes de prix",c:"#C4C8CF"},
   {id:"journee",name:"Journée",sub:"sessions, agenda, dérivés",c:"#E9C46A"},
   {id:"signaux",name:"Signaux",sub:"10 indicateurs",c:"#7FA8F0"},
-  {id:"screener",name:"Screener",sub:"setups, graphiques",c:"#FF8A3D"},
+  {id:"screener",name:"Screener",sub:"setups, graphiques, mensuel",c:"#FF8A3D"},
   {id:"liq",name:"Liquidations",sub:"flux, carte, top 24 h",c:"#F07384"},
   {id:"news",name:"News",sub:"flux macro, agenda",c:"#A99BEA"},
   {id:"veille",name:"Agent",sub:"scalp, analyste, IA",c:"#B8F36B"},
@@ -6560,9 +6637,9 @@ var SRC=[
    freq:"1 appel groupé par minute, seulement quand l'espace Marchés ou Portefeuille est ouvert (4 par minute au plus)"},
   {id:"fx",name:"BCE (Frankfurter)",p:"REST",kind:"od",to:["marches","portefeuille"],ep:["api.frankfurter.dev/v1/latest?base=EUR","api.frankfurter.dev/v1/AAAA-MM-JJ..?base=EUR"],
    data:"Taux de change de référence de la BCE : conversion des cours en euros.",freq:"À la première ouverture de l'espace Marchés"},
-  {id:"robotdata",name:"Robot (historiques)",p:"JSON",kind:"od",to:["marches","portefeuille"],ep:["…github.io/Desk/data/marches-meta.json","…/data/resume.json","…/data/taux.json","…/data/hist/…json"],
+  {id:"robotdata",name:"Robot (historiques)",p:"JSON",kind:"od",to:["marches","portefeuille","screener"],ep:["…github.io/Desk/data/marches-meta.json","…/data/resume.json","…/data/taux.json","…/data/hist/…json"],
    data:"Historiques quotidiens sur 15 ans (Yahoo Finance, FRED, BCE), résumé des performances, courbes de taux et €STR, publiés par ton robot GitHub (branche donnees) : graphiques et statistiques des fiches.",freq:"Résumé et taux à l'ouverture des Marchés, historique à l'ouverture d'une fiche ; mis à jour plusieurs fois par jour par GitHub"},
-  {id:"binhist",name:"Binance (historique)",p:"REST",kind:"od",to:["marches","portefeuille"],ep:["data-api.binance.vision/api/v3/klines"],
+  {id:"binhist",name:"Binance (historique)",p:"REST",kind:"od",to:["marches","portefeuille","screener"],ep:["data-api.binance.vision/api/v3/klines"],
    data:"Historique quotidien des cryptos : graphiques des fiches et risques du portefeuille.",freq:"À la demande (fiche, onglet Risques)"},
   {id:"tr",name:"Traduction",p:"REST",kind:"od",to:["news"],ep:["translate.googleapis.com (gtx)","api.mymemory.translated.net (secours)"],data:"Titres de news traduits en français.",freq:"À chaque nouvelle news"}
 ];
@@ -9437,7 +9514,10 @@ function loadData(p,heldCrypto){
     var cj=cids.filter(function(id){return ids.indexOf(id)<0;}).map(function(id){return hist(id,{});});
     return Promise.all(jobs.concat(cj)).then(function(all){
       var raw={},series={};ids.forEach(function(id,k){raw[id]=all[k];});cids.filter(function(id){return ids.indexOf(id)<0;}).forEach(function(id,k){raw[id]=all[ids.length+k];});
-      var conv=function(id){var b=raw[id]||[];if(!b.length)return null;var ccy=b[b.length-1].currency||"EUR";var S=A().eurSeries(b,id===(cfg().regime||{}).vix?"EUR":ccy,fx);return S.t.length?S:null;};
+      // séries en euros, dividendes réinvestis à leur date de détachement (ETF distribuants, actions) ; le VIX est un niveau, pas un prix
+      var conv=function(id){var b=raw[id]||[];if(!b.length)return null;var ccy=b[b.length-1].currency||"EUR",isVix=id===(cfg().regime||{}).vix,div=null;
+        if(!isVix)try{var ev=CK.mkt.adapters().hist.events(CK.ref.get(id));div=ev&&ev.div||null;}catch(e){div=null;}
+        var S=div&&div.length&&CK.ms?CK.ms.prep(b,div,ccy,fx):A().eurSeries(b,isVix?"EUR":ccy,fx);return S.t.length?S:null;};
       var C=cfg(),px=C.proxies||{};A().poches().forEach(function(q){var x=px[q.id];if(x&&x.id&&raw[x.id])series[q.id]=conv(x.id);});
       var vols={};cids.forEach(function(id){var S=conv(id);if(S&&S.t.length>130)vols[id]=CK.ind.vol(S.t,S.c,120,null,365);});
       var resume=null,closes={};if(res&&typeof res==="object"){resume={};Object.keys(res).forEach(function(k){var r=res[k];if(r&&typeof r==="object"){resume[k]={d:r.d,first:r.first,n:r.n};if(fin(r.c))closes[k]=r.c;}});}
@@ -9489,6 +9569,452 @@ CK.alui={html:html,ensure:ensure,act:act,journal:jRead,state:function(){return {
   reset:function(){ST={R:null,busy:false,err:null,progress:"",key:"",dataKey:"",data:null,dataTs:0,open:{},memo:{}};},
   _t:{viewHTML:viewHTML,headHTML:headHTML,barsHTML:barsHTML,decisionsHTML:decisionsHTML,ordersHTML:ordersHTML,excludedHTML:excludedHTML,peaAltHTML:peaAltHTML,
     journalHTML:journalHTML,setupHTML:setupHTML,rulesHTML:rulesHTML,flagsHTML:flagsHTML,jAdd:jAdd,jRead:jRead,needIds:needIds,fxFn:fxFn,loadData:loadData}};
+})();
+
+/* ================================================================
+   COCKPIT — Screener mensuel multi-actifs (phase 6) : CK.ms
+   Score mensuel par instrument, calculé à la date de décision (dernière séance Euronext du mois,
+   22 h 30 à Paris) avec les seuls historiques datés (point-in-time, en euros, dividendes réinvestis).
+   L'indice de compression existant (CHOP 14 du screener crypto, fonction inchangée) est affiché à côté.
+   Sous-scores 0-100 : momentum, tendance, risque, volatilité, diversification ; score global pondéré
+   par allocation.json → MSCREEN_WEIGHTS (jamais dans l'interface) ; étiquette par table ordonnée
+   (seuils dans allocation.json → screener_seuils) ; explication courte et détail des composantes.
+   Fonctions pures (aucun DOM, aucun réseau) : testables dans Node.
+   ================================================================ */
+(function(){
+"use strict";
+var CK=window.CK=window.CK||{};
+var DAY=864e5;
+function M(){return CK.models||{};}
+function IND(){return CK.ind;}
+function A(){return CK.alloc;}
+function fin(x){return typeof x==="number"&&isFinite(x);}
+function nz(v,d){return fin(v)?v:d;}
+function dict(){return Object.create(null);}
+function cfg(){var d=M().data?M().data("allocation"):null;return d&&typeof d==="object"?d:{};}
+function pct(v,d){return fin(v)?(Math.round(v*Math.pow(10,(d||1)+2))/Math.pow(10,d||1)).toLocaleString("fr-FR")+" %":"—";}
+function mean(a){var s=0;for(var i=0;i<a.length;i++)s+=a[i];return a.length?s/a.length:null;}
+
+var LABELS=["RENFORCER","CONSERVER","SURVEILLER","RÉDUIRE","BASCULER"];
+var SUBS=[{k:"momentum",l:"Momentum"},{k:"tendance",l:"Tendance"},{k:"risque",l:"Risque"},{k:"volatilite",l:"Volatilité"},{k:"diversification",l:"Diversification"}];
+
+/* ---------- Série en euros, dividendes réinvestis ---------- */
+/**
+ * bars : PriceBar[] (timestamp, open, high, low, close, volume) ; div : [[t, montant]] ; ccy : devise des cours ;
+ * fx(ccy, "AAAA-MM-JJ") → € pour 1 (à la date, jamais une date future). Renvoie {t, o, h, l, c (rendement total, €), raw (clôture €), v}.
+ * Les cours bruts sont gardés pour la liquidité ; o / h / l suivent le même facteur que c (ATR et CHOP inchangés en proportion).
+ */
+function prep(bars,div,ccy,fx){
+  var t=[],c=[],o=[],h=[],l=[],v=[],r=[],list=Array.isArray(bars)?bars:[];
+  for(var k=0;k<list.length;k++){var b=list[k],ts=b&&(b.timestamp!=null?b.timestamp:b.t),cl=b&&(b.close!=null?b.close:b.c);if(!fin(ts)||!(cl>0))continue;
+    if(t.length&&ts<=t[t.length-1])continue;var cc=ccy||b.currency||"EUR",x=cc==="EUR"?1:fx?fx(cc,new Date(ts).toISOString().slice(0,10)):null;if(!(x>0))continue;
+    var g=function(y){y=y!=null?y:null;return fin(y)&&y>0?y:cl;};
+    t.push(ts);c.push(cl);o.push(g(b.open!=null?b.open:b.o));h.push(g(b.high!=null?b.high:b.h));l.push(g(b.low!=null?b.low:b.l));v.push(fin(b.volume!=null?b.volume:b.v)?(b.volume!=null?b.volume:b.v):null);r.push(x);}
+  var tr=IND().totalReturn(t,c,div);
+  var S={t:t,c:[],o:[],h:[],l:[],raw:[],v:v};
+  for(var j=0;j<t.length;j++){var f=c[j]>0?tr[j]/c[j]:1;S.c.push(tr[j]*r[j]);S.o.push(o[j]*f*r[j]);S.h.push(Math.max(h[j],c[j])*f*r[j]);S.l.push(Math.min(l[j],c[j])*f*r[j]);S.raw.push(c[j]*r[j]);}
+  return S;
+}
+
+/* ---------- Indicateurs à la date T ---------- */
+function ema(a,n){if(!a.length)return [];var k=2/(n+1),out=[a[0]];for(var i=1;i<a.length;i++)out.push(a[i]*k+out[i-1]*(1-k));return out;}
+function sd(a){var m=mean(a),s=0;for(var i=0;i<a.length;i++)s+=(a[i]-m)*(a[i]-m);return a.length>1?Math.sqrt(s/(a.length-1)):null;}
+function bbWidth(c,e){if(e<19)return null;var w=c.slice(e-19,e+1),m=mean(w),s=sd(w);return m>0&&s!=null?4*s/m:null;}
+function candles(S,a,e){var out=[];for(var k=Math.max(0,a);k<=e;k++)out.push({h:S.h[k],l:S.l[k],c:S.c[k],o:S.o[k]});return out;}
+function prank(x,xs){var lo=0,eq=0;xs.forEach(function(v){if(v<x)lo++;else if(v===x)eq++;});return xs.length?100*(lo+eq/2)/xs.length:50;}
+function T_(){return CK.screener&&CK.screener._t||null;}
+/** Rendements hebdomadaires (clés de semaine) sur `n` semaines ≤ T. */
+function wret(S,T,n){var w=A().weeklyTail(S,T,n),out=dict();for(var k=1;k<w.k.length;k++)out[w.k[k]]=w.v[k]/w.v[k-1]-1;return out;}
+function corrBeta(a,b){var ks=Object.keys(a).filter(function(k){return b[k]!=null;});if(ks.length<26)return {corr:null,beta:null,n:ks.length};
+  var x=ks.map(function(k){return a[k];}),y=ks.map(function(k){return b[k];}),mx=mean(x),my=mean(y),sxy=0,sxx=0,syy=0;
+  for(var i=0;i<x.length;i++){sxy+=(x[i]-mx)*(y[i]-my);sxx+=(x[i]-mx)*(x[i]-mx);syy+=(y[i]-my)*(y[i]-my);}
+  return {corr:sxx>0&&syy>0?sxy/Math.sqrt(sxx*syy):null,beta:syy>0?sxy/syy:null,n:ks.length};}
+/**
+ * Toutes les mesures d'un instrument à la date T. S : prep() ; py : séances par an (252 ou 365) ; R : série de référence (prep ou {t,c}).
+ */
+function analyze(S,T,py,R){
+  var I=IND();if(!S||!S.t||!S.t.length)return null;var e=I.idxAt(S.t,T);if(e<0)return null;
+  var base=A().metricsAt({t:S.t,c:S.c},T,py,null);if(!base)return null;if(base.stale)return {stale:true,last:base.last};
+  var m=Object.assign({},base),c=S.c,P=c[e];
+  m.trendPts=fin(base.trend)?base.trend*100:null;
+  var tt=T_(),cs=candles(S,e-14,e);
+  m.atrp=tt&&cs.length>=15?tt.atrp(cs,14):null;
+  m.chop=tt&&cs.length>=15?tt.chop(cs,14):null;
+  var closes=c.slice(Math.max(0,e-299),e+1);m.rsi=tt&&closes.length>15?tt.rsi(closes,14):null;
+  var e12=ema(closes,12),e26=ema(closes,26),mac=e12.map(function(x,k){return x-e26[k];}),sig=ema(mac,9);
+  m.macd=closes.length>=60?mac[mac.length-1]/P:null;m.macdSig=closes.length>=60?sig[sig.length-1]/P:null;m.macdOk=m.macd!=null&&m.macd>m.macdSig&&m.macd>0;
+  m.bbw=bbWidth(c,e);var ws=[],chs=[];for(var k=Math.max(19,e-251);k<=e;k++){var bw=bbWidth(c,k);if(bw!=null)ws.push(bw);if(tt&&k>=14){var ch=tt.chop(candles(S,k-14,k),14);if(ch!=null)chs.push(ch);}}
+  m.bbwPct=m.bbw!=null&&ws.length>=60?prank(m.bbw,ws):null;m.chopPct=m.chop!=null&&chs.length>=60?prank(m.chop,chs):null;
+  var vs=S.v?S.v.slice(Math.max(0,e-10),e).filter(function(x){return x>0;}):[];m.relVol=S.v&&S.v[e]>0&&vs.length>=5?S.v[e]/mean(vs):null;
+  var liq=[];for(var q=Math.max(0,e-9);q<=e;q++)if(S.v&&S.v[q]>0&&S.raw)liq.push(S.v[q]*S.raw[q]);m.liq=liq.length>=5?mean(liq):null;
+  m.hiDist=fin(base.range)&&fin(base.dd)?base.dd:null;
+  var a=Math.max(0,I.idxAt(S.t,S.t[e]-365*DAY)),lo=Infinity;for(var z=a;z<=e;z++)if(c[z]<lo)lo=c[z];m.loDist=lo>0?P/lo-1:null;
+  if(R&&R.t&&R.t.length){var cb=corrBeta(wret(S,T,156),wret(R,T,156));m.corrRef=cb.corr;m.beta=cb.beta;
+    var r6=I.minusMonths(T,6),er=I.idxAt(R.t,T);m.rs=base.mom6!=null&&er>=0&&I.idxAt(R.t,r6)>=0&&R.t[0]<=r6?base.mom6-I.ret(R.t,R.c,r6,R.t[er]):null;}
+  else{m.corrRef=null;m.beta=null;m.rs=null;}
+  return m;
+}
+/** Historique de fin de mois (5 ans, sans rien voir après chaque date) des grandeurs qui deviennent des percentiles. */
+function history(S,T,py){
+  var h={momAdj:[],dd:[],mdd12:[],vol60:[]};
+  for(var k=1;k<=60;k++){var d=new Date(T),Tk=Date.UTC(d.getUTCFullYear(),d.getUTCMonth()-k+1,0,21,30);if(!S.t.length||Tk<S.t[0])break;
+    var m=A().metricsAt({t:S.t,c:S.c},Tk,py,null);if(!m||m.stale)continue;
+    if(fin(m.momAdj))h.momAdj.push(m.momAdj);if(fin(m.dd))h.dd.push(m.dd);if(fin(m.mdd12))h.mdd12.push(m.mdd12);if(fin(m.vol60))h.vol60.push(-m.vol60);}
+  return h;
+}
+/**
+ * Sous-scores 0-100. Momentum, risque et volatilité : percentile dans l'historique propre de l'instrument (5 ans, 12 fins de mois au moins).
+ * Tendance : 25 points par condition (cours > MM50, > MM100, > MM200, MM50 > MM200). Volatilité : bonus de 10 si les bandes de
+ * Bollinger sont dans leur 20 % le plus étroit de l'année (compression). Diversification : (1 − corrélation) × 50, corrélation
+ * hebdomadaire sur 3 ans avec ton portefeuille (ou avec l'indice de référence si tu n'as pas de portefeuille).
+ */
+function subscores(m,h,rho){
+  var s={momentum:null,tendance:null,risque:null,volatilite:null,diversification:null};if(!m||m.stale)return s;
+  var ok=function(a){return a&&a.length>=12;};
+  if(fin(m.momAdj)&&ok(h.momAdj))s.momentum=prank(m.momAdj,h.momAdj.concat([m.momAdj]));
+  if(fin(m.trendPts))s.tendance=m.trendPts;
+  var r=[];if(fin(m.dd)&&ok(h.dd))r.push(prank(m.dd,h.dd.concat([m.dd])));if(fin(m.mdd12)&&ok(h.mdd12))r.push(prank(m.mdd12,h.mdd12.concat([m.mdd12])));if(r.length)s.risque=mean(r);
+  if(fin(m.vol60)&&ok(h.vol60))s.volatilite=Math.min(100,prank(-m.vol60,h.vol60.concat([-m.vol60]))+(fin(m.bbwPct)&&m.bbwPct<=20?10:0));
+  if(fin(rho))s.diversification=Math.max(0,Math.min(100,(1-rho)*50));
+  return s;
+}
+function weights(){var w=cfg().MSCREEN_WEIGHTS||{};return {momentum:nz(w.momentum,30),tendance:nz(w.tendance,25),risque:nz(w.risque,15),volatilite:nz(w.volatilite,15),diversification:nz(w.diversification,15)};}
+/** Score global : moyenne pondérée des sous-scores disponibles (les poids viennent d'allocation.json). */
+function global(s){var W=weights(),t=0,ws=0;SUBS.forEach(function(x){if(fin(s[x.k])&&W[x.k]>0){t+=W[x.k]*s[x.k];ws+=W[x.k];}});return ws>0?Math.round(t/ws*10)/10:null;}
+/** Explication courte : la composante la plus forte et la plus faible, en mots simples. */
+function explain(r){
+  if(!r.m||r.m.stale)return "Données trop anciennes ou absentes à la date de décision.";
+  if(r.score==null)return "Historique trop court pour un score fiable (moins d'un an).";
+  var W={momentum:["élan fort sur 3 à 12 mois","élan faible sur 3 à 12 mois"],tendance:["au-dessus de ses moyennes mobiles","sous ses moyennes mobiles"],
+    risque:["proche de ses plus hauts","loin de ses plus hauts"],volatilite:["calme pour lui","plus agité que d'habitude"],
+    diversification:r.divBasis==="portefeuille"?["diversifie bien ton portefeuille","très corrélé à ton portefeuille"]:["peu lié à son marché de référence","suit de près son marché de référence"]};
+  var ks=SUBS.map(function(x){return x.k;}).filter(function(k){return fin(r.sub[k]);}).sort(function(a,b){return r.sub[b]-r.sub[a];});
+  if(!ks.length)return "";var hi=ks[0],lo=ks[ks.length-1],out=[];
+  if(r.sub[hi]>=60)out.push(W[hi][0]);if(lo!==hi&&r.sub[lo]<=40)out.push(W[lo][1]);
+  var liq=A().pocheOf(r.i)==="liquidites";
+  if(!liq&&fin(r.m.rsi)&&r.m.rsi>75)out.push("surachat (RSI "+Math.round(r.m.rsi)+")");else if(!liq&&fin(r.m.rsi)&&r.m.rsi<25)out.push("survente (RSI "+Math.round(r.m.rsi)+")");
+  if(fin(r.m.bbwPct)&&r.m.bbwPct<=20)out.push("volatilité comprimée");
+  var t=out.join(", ");return t?t.charAt(0).toUpperCase()+t.slice(1)+".":"Profil moyen sur toutes les composantes.";
+}
+
+/* ---------- Étiquette (table ordonnée : la première règle vraie l'emporte) ---------- */
+function fee(i){var sp=((cfg().couts||{}).spread_bps_defaut||{})[i&&i.vehicle];return nz(i&&i.ter,0)+nz(i&&i.spread_bps,nz(sp,10))/200;}
+/** Meilleure alternative de même exposition : moins chère (≥ 0,05 pt par an) ou éligible PEA alors que la ligne ne l'est pas. */
+function betterAlt(r,rows,prefs){
+  var i=r.i;if(!i||!i.alt_group)return null;var peaOn=prefs&&prefs.pea_mode&&prefs.pea_mode!=="off",peaOk=function(x){return CK.pea?CK.pea.allowedIn(x,"PEA").ok:false;};
+  var mine=fee(i),cand=rows.filter(function(x){return x!==r&&x.i&&x.i.alt_group===i.alt_group&&x.score!=null&&(!prefs||!prefs.saved||CK.allow(x.i,prefs));});
+  var best=null;cand.forEach(function(x){var gain=mine-fee(x.i),why=null;
+    if(peaOn&&peaOk(i)&&!peaOk(x.i))return;   // en mode PEA, jamais d'un éligible vers un non éligible
+    if(gain>=0.05)why="même exposition, frais plus bas ("+String(Math.round(gain*100)/100).replace(".",",")+" pt par an de moins)";
+    else if(peaOn&&!peaOk(i)&&peaOk(x.i)&&gain>-0.1)why="même exposition, éligible PEA";
+    if(why&&(!best||gain>best.gain))best={row:x,gain:gain,why:why};});
+  return best;
+}
+/**
+ * ctx : {prefs (enregistrées ou null), rf12 (taux sans risque 12 mois, en fraction), held ({id: {value, account_type, gain_share}})}.
+ * Renvoie {label, why}. Sans règles enregistrées : aucune étiquette (seulement les scores).
+ */
+function label(r,rows,ctx){
+  var S=cfg().screener_seuils||{},p=ctx.prefs;
+  if(!p||!p.saved)return {label:null,why:"Enregistre tes règles pour voir les étiquettes."};
+  if(!CK.allow(r.i,p)){var w=CK.allow.why(r.i,p);return {label:"HORS",why:/^Hors de tes classes/.test(w)?w:"Hors de tes règles : "+w.charAt(0).toLowerCase()+w.slice(1)};}
+  if(!r.m||r.m.stale||r.score==null||!(r.m.years>=1))return {label:"SURVEILLER",why:"Données insuffisantes : on observe avant d'agir."};
+  var alt=betterAlt(r,rows,p),h=ctx.held&&ctx.held[r.id];
+  if(alt){var ok=true;
+    if(h&&h.value>0){var cost=2*(CK.sel?CK.sel.orderCost(h.value,h.account_type||"CTO",r.i):0)+(CK.sel?CK.sel.saleTax(h.value,h.account_type||"CTO",h.gain_share||0):0);
+      ok=h.value*alt.gain/100>cost;alt.cost=cost;}
+    if(ok)return {label:"BASCULER",why:"Vers "+alt.row.i.symbol+" : "+alt.why+(alt.cost!=null?" ; gain annuel supérieur au coût de bascule":"")+".",alt:alt.row.id};}
+  if(A().pocheOf(r.i)==="liquidites")return {label:"CONSERVER",why:"Fonds monétaire : réserve de liquidités, rendement proche du taux sans risque (son score sert peu)."};
+  var rsi=r.m.rsi;   // un fonds monétaire monte tout seul : RSI sans signification
+  if(fin(rsi)&&(rsi>nz(S.rsi_surachat,75)||rsi<nz(S.rsi_survente,25)))return {label:"SURVEILLER",why:(rsi>50?"Surachat":"Survente")+" (RSI "+Math.round(rsi)+") : attendre que ça se calme."};
+  var m12=r.m.mom12_1,tr=r.sub.tendance;
+  if(r.score>=nz(S.renforcer_score_min,70)&&fin(tr)&&tr>=nz(S.renforcer_tendance_min,75)&&fin(m12)&&m12>nz(ctx.rf12,0))return {label:"RENFORCER",why:"Score élevé, tendance haussière et performance 12 mois (hors dernier mois) au-dessus du taux sans risque."};
+  if(r.score<nz(S.reduire_score_max,40)&&((fin(tr)&&tr<=nz(S.reduire_tendance_max,25))||(fin(m12)&&m12<0)))return {label:"RÉDUIRE",why:"Score faible avec une tendance baissière ou une performance 12 mois négative."};
+  if(r.score>=nz(S.conserver_score_min,50))return {label:"CONSERVER",why:"Score correct, sans signal fort."};
+  return {label:"SURVEILLER",why:"Score moyen : rien d'assez net pour agir."};
+}
+
+/* ---------- Référence de chaque instrument ---------- */
+var REFS={france:"tv:EURONEXT:PX1",europe:"tv:STOXX:SXXP",etats_unis:"tv:SP:SPX",monde:"isin:LU1681043599"};
+/** Indice de référence : CAC 40 (France), STOXX 600 (Europe), S&P 500 (États-Unis), MSCI World (monde et autres actions), sinon la série de sa classe. */
+function refOf(i){
+  if(!i)return null;var px=cfg().proxies||{};
+  if(i.asset_class==="actions"||i.asset_class==="immobilier_cote")return REFS[i.region]||REFS.monde;
+  var p=A().pocheOf(i),x=p&&px[p];return x&&x.id&&x.id!==i.id?x.id:p==="crypto"&&i.id!=="crypto:BTC"?"crypto:BTC":REFS.monde;
+}
+
+/* ---------- Calcul complet ---------- */
+/**
+ * input : {T, series: {id: prep()}, prefs, rf12, held, pfRet ({semaine: rendement du portefeuille} ou null), risk ({id: contribution}),
+ *   ids: [instruments à classer]}. Renvoie {rows, T, weights}. Chaque ligne : {id, i, m, sub, score, label, why, explain, ref, held, rc}.
+ */
+function run(input){
+  var T=input.T,series=input.series||{},rows=[];
+  (input.ids||[]).forEach(function(id){
+    var i=CK.ref.get(id),S=series[id];if(!i)return;var py=i.vehicle==="spot_crypto"||(i.asset_class==="crypto"&&!i.isin)?365:252;
+    var ref=refOf(i),R=series[ref]||null,m=S&&S.t.length?analyze(S,T,py,R):null,h=m&&!m.stale?history(S,T,py):{};
+    var rho=null;if(m&&!m.stale){if(input.pfRet){var cb=corrBeta(wret(S,T,156),input.pfRet);rho=cb.corr;}if(rho==null)rho=m.corrRef;}
+    var sub=subscores(m,h,rho),row={id:id,i:i,m:m,sub:sub,score:m&&!m.stale&&fin(sub.momentum)?global(sub):null,ref:ref,rho:rho,divBasis:input.pfRet?"portefeuille":"indice de référence",
+      held:input.held&&input.held[id]||null,rc:input.risk&&fin(input.risk[id])?input.risk[id]:null,months:h.momAdj?h.momAdj.length+1:0};
+    rows.push(row);});
+  rows.forEach(function(r){var L=label(r,rows,input);r.label=L.label;r.why=L.why;r.alt=L.alt||null;r.explain=explain(r);});
+  return {rows:rows,T:T,weights:weights()};
+}
+
+CK.ms={LABELS:LABELS,SUBS:SUBS,REFS:REFS,prep:prep,analyze:analyze,history:history,subscores:subscores,global:global,weights:weights,label:label,explain:explain,
+  betterAlt:betterAlt,refOf:refOf,fee:fee,run:run,corrBeta:corrBeta,wret:wret,prank:prank,ema:ema};
+})();
+
+/* ================================================================
+   COCKPIT — Screener mensuel multi-actifs : interface (phase 6) : CK.msui
+   Bascule « Crypto (compression) / Mensuel multi-actifs » dans l'espace Screener (le screener crypto
+   n'est ni modifié ni rechargé : il est seulement masqué en mode mensuel). Le mode mensuel a son propre
+   bloc (#msMeta, #msBody) et ne charge rien avant d'être ouvert : historiques du robot (en cache),
+   Binance pour la crypto, taux et résumé du robot. Aucun appel au scanner TradingView.
+   Les fonctions de rendu (CK.msui._t) n'utilisent pas le DOM : testables dans Node.
+   ================================================================ */
+(function(){
+"use strict";
+var CK=window.CK=window.CK||{};
+var DAY=864e5;
+function U(){return CK.u||{};}
+function M(){return CK.models||{};}
+function esc(s){var f=U().esc;return f?f(s):String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function fin(x){return typeof x==="number"&&isFinite(x);}
+function nf(v,d){if(!fin(v))return "—";if(Math.abs(v)<Math.pow(10,-(d||0))/2)v=0;return Number(v).toLocaleString("fr-FR",{minimumFractionDigits:d,maximumFractionDigits:d});}
+function pc(v,d){if(!fin(v))return "—";d=d==null?1:d;var p=Math.pow(10,d),r=Math.round(v*100*p)/p;return (r>0?"+":r<0?"−":"")+nf(Math.abs(r),d)+" %";}
+function pa(v,d){return fin(v)?nf(v*100,d==null?1:d)+" %":"—";}
+function now(){var e=CK.dk&&CK.dk.env;return e&&typeof e.now==="function"?e.now():Date.now();}
+function frDate(iso){var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||""));return m?m[3]+"/"+m[2]+"/"+m[1]:"";}
+function cfg(){var d=M().data?M().data("allocation"):null;return d&&typeof d==="object"?d:{};}
+function disclaimer(){return CK.DISCLAIMER||"";}
+function lsGet(k){try{return CK.ls?CK.ls(k):null;}catch(e){return null;}}
+function lsSet(k,v){try{if(CK.ls)CK.ls(k,v);}catch(e){}}
+
+/* ---------- Libellés ---------- */
+var LBL={"RENFORCER":["up","Renforcer"],"CONSERVER":["keep","Conserver"],"SURVEILLER":["watch","Surveiller"],"RÉDUIRE":["down","Réduire"],"BASCULER":["sw","Basculer"],"HORS":["out","Hors de tes classes"]};
+var GROUPS=[{id:"tous",label:"Tous"},{id:"actions_etf",label:"ETF actions"},{id:"actions_titres",label:"Actions"},{id:"obligations",label:"Obligations"},
+  {id:"mp",label:"Matières premières"},{id:"immobilier_cote",label:"Immobilier"},{id:"crypto",label:"Crypto"},{id:"liquidites",label:"Monétaire"}];
+var MP={or:1,argent:1,petrole:1,gaz:1,matieres_premieres:1,agricole:1};
+function groupOf(i){var p=CK.alloc?CK.alloc.pocheOf(i):null;return MP[p]?"mp":p||"autre";}
+var COLS=[{k:"nom",l:"Instrument"},{k:"score",l:"Score",n:1},{k:"momentum",l:"Mom.",n:1,t:"Momentum ajusté du risque (3, 6, 12 mois)"},{k:"tendance",l:"Tend.",n:1,t:"Tendance : cours vs moyennes 50 / 100 / 200 j"},
+  {k:"risque",l:"Risque",n:1,t:"Baisse depuis le plus haut et perte maximale sur 12 mois (100 = le plus favorable)"},{k:"volatilite",l:"Vol.",n:1,t:"Volatilité 60 j inverse, bonus si compression"},
+  {k:"diversification",l:"Divers.",n:1,t:"Diversification : (1 − corrélation) × 50"},{k:"chop",l:"Compression",n:1,t:"Indice de compression du screener crypto (CHOP 14, quotidien) et son centile sur un an"},
+  {k:"pea",l:"PEA"},{k:"label",l:"Étiquette"},{k:"explain",l:"En bref"}];
+var PEA_UI={eligible:["ok","PEA"],eligible_regle:["rule","PEA (règle)"],not_eligible:["no","Non PEA"],unknown:["unk","À vérifier"]};
+function peaBadge(i){var s=CK.pea&&CK.pea.status?CK.pea.status(i):{status:"unknown",label:"Éligibilité à vérifier"},m=PEA_UI[s.status]||PEA_UI.unknown;
+  return '<span class="mk-pea '+m[0]+'" title="'+esc(s.label+(s.source?" · source : "+s.source:"")+(s.checked_at?" · vérifié le "+frDate(s.checked_at):""))+'">'+esc(m[1])+'</span>';}
+function peaPass(i,f){if(!f||f==="tous")return true;var s=CK.pea?CK.pea.status(i).status:"unknown";return s==="eligible"||s==="eligible_regle"||(f==="verifier"&&s==="unknown");}
+function badge(l){if(!l)return '<span class="ms-lbl ms-none">—</span>';var m=LBL[l]||["watch",l];return '<span class="ms-lbl ms-'+m[0]+'">'+esc(m[1])+'</span>';}
+function sc(v){return fin(v)?'<span class="ms-sc" style="--v:'+Math.round(Math.max(0,Math.min(100,v)))+'">'+nf(v,0)+'</span>':'<span class="ms-sc ms-na">—</span>';}
+
+/* ================================================================
+   Rendu (sans DOM)
+   ================================================================ */
+/** Tri et filtres. o : {grp, lbl, peaf, mine, q, sort, dir, prefs}. */
+function filterRows(rows,o){
+  o=o||{};var q=String(o.q||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim();
+  var out=rows.filter(function(r){
+    if(o.grp&&o.grp!=="tous"&&groupOf(r.i)!==o.grp)return false;
+    if(o.lbl&&o.lbl!=="toutes"&&r.label!==o.lbl)return false;
+    if(!peaPass(r.i,o.peaf))return false;
+    if(o.mine&&r.label==="HORS")return false;
+    if(q){var t=(r.i.symbol+" "+r.i.name+" "+(r.i.isin||"")).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");if(t.indexOf(q)<0)return false;}
+    return true;});
+  var k=o.sort||"score",dir=o.dir==="asc"?1:-1,val=function(r){if(k==="nom")return r.i.symbol;if(k==="score")return r.score;if(k==="chop")return r.m&&r.m.chop;if(k==="label")return r.label||"";return r.sub&&r.sub[k];};
+  out.sort(function(a,b){var x=val(a),y=val(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return (x<y?-1:x>y?1:0)*(k==="nom"||k==="label"?-dir:dir);});
+  return out;
+}
+function rowHTML(r,open){
+  var m=r.m||{},ch=fin(m.chop)?nf(m.chop,0)+(fin(m.chopPct)?'<em>'+nf(m.chopPct,0)+'ᵉ c.</em>':''):"—";
+  var main='<tr class="clk ms-row'+(open?" on":"")+'" data-ms="open" data-id="'+esc(r.id)+'" tabindex="0" aria-expanded="'+(open?"true":"false")+'">'+
+    '<td class="mk-nm"><b>'+esc(r.i.symbol)+(r.held?' <i class="ms-held" title="Dans ton portefeuille">●</i>':'')+'</b><span>'+esc(r.i.name)+'</span></td>'+
+    '<td class="r">'+sc(r.score)+'</td>'+["momentum","tendance","risque","volatilite","diversification"].map(function(k){return '<td class="r">'+(fin(r.sub[k])?nf(r.sub[k],0):"—")+'</td>';}).join("")+
+    '<td class="r ms-chop">'+ch+'</td><td>'+peaBadge(r.i)+'</td><td>'+badge(r.label)+'</td><td class="ms-ex">'+esc(r.explain||"")+'</td></tr>';
+  return open?main+'<tr class="ms-det"><td colspan="'+COLS.length+'">'+detailHTML(r)+'</td></tr>':main;
+}
+function kv(k,v,t){return '<div'+(t?' title="'+esc(t)+'"':'')+'><em>'+esc(k)+'</em><b>'+v+'</b></div>';}
+/** Détail d'une ligne : toutes les composantes, pondérations, étiquette et alternative. */
+function detailHTML(r){
+  var m=r.m||{},W=CK.ms.weights(),refI=CK.ref.get(r.ref),fee=CK.ms.fee(r.i);
+  if(!r.m||m.stale)return '<div class="ms-detb"><p class="mk-note">'+esc(r.explain)+'</p></div>';
+  var subs='<div class="ms-subs">'+CK.ms.SUBS.map(function(s){return '<div><em>'+esc(s.l)+' · poids '+esc(W[s.k])+'</em><i style="--v:'+(fin(r.sub[s.k])?Math.round(r.sub[s.k]):0)+'"></i><b>'+(fin(r.sub[s.k])?nf(r.sub[s.k],0):"—")+'</b></div>';}).join("")+'</div>';
+  var g='<div class="ms-kv">'+
+    kv("Momentum 1 / 3 / 6 / 12 mois",[m.mom1,m.mom3,m.mom6,m.mom12].map(function(x){return pc(x);}).join(" / "))+
+    kv("12 mois hors dernier mois",pc(m.mom12_1))+kv("Momentum ajusté du risque",fin(m.momAdj)?nf(m.momAdj,2):"—","rendement / (volatilité × √durée), moyenne 3 / 6 / 12 mois")+
+    kv("Tendance",fin(m.trendPts)?nf(m.trendPts,0)+" / 100":"—","25 points par condition : cours > MM50, > MM100, > MM200, MM50 > MM200")+
+    kv("MACD",m.macd==null?"—":m.macdOk?"tendance confirmée":"non confirmée","MACD au-dessus de sa ligne de signal et de zéro")+
+    kv("Volatilité 20 / 60 / 120 j",[m.vol20,m.vol60,m.vol120].map(function(x){return pa(x,1);}).join(" / "))+kv("Amplitude moyenne (ATR 14)",fin(m.atrp)?nf(m.atrp,2)+" %":"—")+
+    kv("Sous le plus haut d'un an",pc(m.dd))+kv("Au-dessus du plus bas d'un an",pc(m.loDist))+kv("Perte maximale 12 mois",pc(m.mdd12))+
+    kv("RSI 14 (filtre)",fin(m.rsi)?nf(m.rsi,0):"—","au-dessus de 75 : surachat ; sous 25 : survente")+
+    kv("Bandes de Bollinger",fin(m.bbw)?"largeur "+pa(m.bbw)+(fin(m.bbwPct)?" · "+nf(m.bbwPct,0)+"ᵉ centile sur 1 an":""):"—","bas centile = volatilité comprimée")+
+    kv("Compression (CHOP 14)",fin(m.chop)?nf(m.chop,1)+(fin(m.chopPct)?" · "+nf(m.chopPct,0)+"ᵉ centile sur 1 an":""):"—","même indice que le screener crypto, sur bougies quotidiennes")+
+    kv("Volume relatif",fin(m.relVol)?"× "+nf(m.relVol,2):"—","volume du jour / moyenne des 10 jours précédents")+
+    kv("Liquidité (valeur échangée, 10 j)",fin(m.liq)?nf(m.liq/1e6,m.liq>=1e7?0:1)+" M€ / jour":"—")+
+    kv("Référence",esc(refI?refI.name:r.ref||"—"))+kv("Corrélation · beta (3 ans)",(fin(m.corrRef)?nf(m.corrRef,2):"—")+" · "+(fin(m.beta)?nf(m.beta,2):"—"))+
+    kv("Force relative 6 mois",pc(m.rs),"performance 6 mois moins celle de la référence")+
+    kv("Diversification",fin(r.rho)?"corrélation "+nf(r.rho,2)+" avec ton "+(r.divBasis==="portefeuille"?"portefeuille":"marché de référence"):"—")+
+    (fin(r.rc)?kv("Part du risque de ton portefeuille",pa(r.rc)):"")+
+    kv("Frais estimés",nf(fee,2)+" %/an","frais courants + demi-spread")+'</div>';
+  var alt=r.alt?CK.ref.get(r.alt):null;
+  return '<div class="ms-detb">'+subs+g+'<p class="ms-why">'+badge(r.label)+' '+esc(r.why||"")+(alt?' <button type="button" class="btn sm" data-ms="fiche" data-id="'+esc(alt.id)+'">Voir '+esc(alt.symbol)+'</button>':'')+
+    ' <button type="button" class="btn sm" data-ms="fiche" data-id="'+esc(r.id)+'">Fiche</button></p>'+
+    '<p class="mk-note">Données du '+esc(frDate(m.first))+' au '+esc(frDate(m.last))+' (euros, dividendes réinvestis) · '+esc(r.months)+' fins de mois pour les centiles.</p></div>';
+}
+function barHTML(o,counts){
+  var seg=function(list,act,cur){return list.map(function(x){return '<button type="button" data-ms="'+act+'" data-id="'+esc(x.id)+'" aria-pressed="'+(x.id===cur?"true":"false")+'">'+esc(x.label)+(counts&&counts[act+":"+x.id]!=null?' <em>'+counts[act+":"+x.id]+'</em>':'')+'</button>';}).join("");};
+  var lbls=[{id:"toutes",label:"Toutes"}].concat(["RENFORCER","CONSERVER","SURVEILLER","RÉDUIRE","BASCULER"].map(function(k){return {id:k,label:LBL[k][1]};}));
+  return '<div class="ms-bar"><div class="seg mk-tabs" role="group" aria-label="Classe">'+seg(GROUPS,"grp",o.grp||"tous")+'</div>'+
+    '<div class="ms-bar2"><div class="seg" role="group" aria-label="Étiquette">'+seg(lbls,"lbl",o.lbl||"toutes")+'</div>'+
+    '<div class="seg" role="group" aria-label="Filtre PEA">'+seg([{id:"tous",label:"Tous"},{id:"eligibles",label:"Éligibles PEA"},{id:"verifier",label:"+ à vérifier"}],"peaf",o.peaf||"tous")+'</div>'+
+    '<label class="ms-chk"><input type="checkbox" data-ms="mine"'+(o.mine?" checked":"")+'> Seulement mes classes</label>'+
+    '<input type="search" class="ms-q" data-ms="q" placeholder="Rechercher" value="'+esc(o.q||"")+'" autocomplete="off"></div></div>';
+}
+function tableHTML(rows,o){
+  o=o||{};var open=o.open||{};
+  if(!rows.length)return '<p class="mk-note">Aucun instrument ne correspond à ces filtres.</p>';
+  return '<div class="tbl-wrap"><table class="scan mk-table pf-tb ms-table"><thead><tr>'+COLS.map(function(c){var on=(o.sort||"score")===c.k;
+    return '<th'+(c.n?' class="r"':'')+(c.t?' title="'+esc(c.t)+'"':'')+'>'+(c.k==="pea"||c.k==="explain"?esc(c.l):'<button type="button" class="ms-sort'+(on?" on":"")+'" data-ms="sort" data-id="'+c.k+'">'+esc(c.l)+(on?(o.dir==="asc"?" ▲":" ▼"):"")+'</button>')+'</th>';}).join("")+
+    '</tr></thead><tbody>'+rows.map(function(r){return rowHTML(r,!!open[r.id]);}).join("")+'</tbody></table></div>';
+}
+function weightsHTML(){var W=CK.ms.weights(),S=cfg().screener_seuils||{};
+  return '<details class="al-card ms-meth"><summary>Comment le score est calculé</summary><p>Score global = moyenne pondérée des sous-scores : '+CK.ms.SUBS.map(function(s){return esc(s.l)+' '+esc(W[s.k]);}).join(" · ")+' (fichier allocation.json, MSCREEN_WEIGHTS).</p><ul>'+
+    '<li><b>Momentum</b> : rendement 3, 6 et 12 mois divisé par la volatilité, comparé à son propre historique de 5 ans (centile).</li>'+
+    '<li><b>Tendance</b> : 25 points par condition (cours au-dessus des moyennes 50, 100 et 200 jours ; moyenne 50 au-dessus de la 200).</li>'+
+    '<li><b>Risque</b> : baisse depuis le plus haut d\'un an et perte maximale sur 12 mois, comparées à son historique (100 = le plus favorable).</li>'+
+    '<li><b>Volatilité</b> : volatilité 60 jours inverse, comparée à son historique ; +10 si les bandes de Bollinger sont dans leur 20 % le plus étroit de l\'année.</li>'+
+    '<li><b>Diversification</b> : (1 − corrélation hebdomadaire sur 3 ans) × 50, avec ton portefeuille, ou avec le marché de référence si tu n\'en as pas.</li></ul>'+
+    '<p>Étiquettes, dans l\'ordre (la première vraie l\'emporte) : hors de tes classes → données insuffisantes (Surveiller) → même exposition moins chère ou éligible PEA, avec un gain annuel supérieur au coût de bascule si tu la détiens (Basculer) → RSI au-dessus de '+esc(S.rsi_surachat||75)+' ou sous '+esc(S.rsi_survente||25)+' (Surveiller) → score ≥ '+esc(S.renforcer_score_min||70)+', tendance ≥ '+esc(S.renforcer_tendance_min||75)+' et 12 mois hors dernier mois au-dessus du taux sans risque (Renforcer) → score &lt; '+esc(S.reduire_score_max||40)+' avec tendance ≤ '+esc(S.reduire_tendance_max||25)+' ou 12 mois négatif (Réduire) → score ≥ '+esc(S.conserver_score_min||50)+' (Conserver) → sinon Surveiller. Seuils : allocation.json, screener_seuils.</p>'+
+    '<p>Tout est calculé à la date de décision avec les seuls cours connus ce jour-là, en euros, dividendes réinvestis. L\'indice de compression (CHOP) est celui du screener crypto, appliqué aux bougies quotidiennes ; il est affiché, pas compté dans le score.</p></details>';}
+/** Vue complète. st : {R, rows, busy, err, progress, o (filtres), prefs, asOf}. */
+function viewHTML(st){
+  var p=st.prefs||{},o=st.o||{};
+  var head='<div class="ms-head"><div><h3>Screener mensuel'+(st.R?' · '+esc(st.monthLabel||""):'')+'</h3><p>'+(st.R?esc(st.dataLabel||"")+' · '+esc(st.R.rows.length)+' instruments · score 0-100 et étiquette selon tes règles':'Classement mensuel de tous les instruments suivis (ETF, actions, obligations, matières premières, crypto).')+'</p></div>'+
+    '<div class="ms-acts">'+(p.saved?'':'<button type="button" class="btn sm primary" data-ms="prefs">Définir mes règles</button>')+'<button type="button" class="btn sm" data-ms="run">Recalculer</button></div></div>'+
+    (p.saved?'':'<p class="pf-banner info">Les scores s\'affichent pour tous les instruments. Les étiquettes (Renforcer, Réduire…) n\'apparaissent qu\'une fois tes règles enregistrées, et jamais pour une classe que tu n\'as pas cochée.</p>');
+  if(st.err&&!st.R)return head+'<div class="pf-banner warn">'+esc(st.err)+'</div>';
+  if(!st.R)return head+'<div class="al-load"><span class="al-spin" aria-hidden="true"></span>Lecture des historiques… '+esc(st.progress||"")+'</div>';
+  var counts={};(st.R.rows||[]).forEach(function(r){var g=groupOf(r.i);counts["grp:"+g]=(counts["grp:"+g]||0)+1;counts["grp:tous"]=(counts["grp:tous"]||0)+1;if(r.label)counts["lbl:"+r.label]=(counts["lbl:"+r.label]||0)+1;});
+  var rows=filterRows(st.R.rows,Object.assign({},o,{prefs:p}));
+  return head+(st.busy?'<p class="mk-note">Mise à jour en cours… '+esc(st.progress||"")+'</p>':'')+(st.missing&&st.missing.length?'<p class="mk-note">Historique indisponible pour '+esc(st.missing.length)+' instrument(s) : ils restent sans score.</p>':'')+
+    barHTML(o,counts)+tableHTML(rows,Object.assign({},o,{open:st.open||{}}))+weightsHTML()+'<p class="mk-disc">'+esc(disclaimer())+'</p>';
+}
+
+/* ================================================================
+   Données et calcul
+   ================================================================ */
+var ST={R:null,busy:false,err:null,progress:"",data:null,dataTs:0,key:"",o:null,open:{}},seen=false,built=false;
+function universe(){return CK.ref.all().filter(function(i){return i.is_investable===true&&i.is_active!==false&&i.vehicle!=="cash"&&i.asset_class!=="stablecoin"&&i.asset_class!=="devises";}).map(function(i){return i.id;});}
+function refIds(){var out=[];Object.keys(CK.ms.REFS).forEach(function(k){out.push(CK.ms.REFS[k]);});var px=cfg().proxies||{};Object.keys(px).forEach(function(k){if(px[k]&&px[k].id)out.push(px[k].id);});out.push("crypto:BTC");
+  return out.filter(function(x,k){return out.indexOf(x)===k;});}
+function hist(id){var i=CK.ref.get(id),crypto=/^crypto:/.test(id);if(!CK.mkt||!CK.mkt.history)return Promise.resolve({bars:[],div:null});
+  return CK.mkt.history(id,crypto?{from:now()-8*365*DAY}:{}).then(function(b){var ev=null;try{var h=CK.mkt.adapters().hist;ev=h&&h.events?h.events(i):null;}catch(e){ev=null;}return {bars:b||[],div:ev&&ev.div||null};},function(){return {bars:[],div:null};});}
+/** Charge tous les historiques (4 à la fois), avec progression. */
+function loadAll(repaint){
+  if(ST.data&&now()-ST.dataTs<6*36e5)return Promise.resolve(ST.data);
+  var ids=universe(),all=ids.concat(refIds().filter(function(x){return ids.indexOf(x)<0;})),done=0,raw={};
+  var fxp=CK.fx&&CK.fx.load?Promise.resolve(CK.fx.load()).then(null,function(){return null;}):Promise.resolve(null);
+  return fxp.then(function(){return hist("tv:FX_IDC:EURUSD");}).then(function(eu){
+    var eus=CK.alloc.eurSeries(eu.bars,"EUR",null),fx=CK.alui&&CK.alui._t.fxFn?CK.alui._t.fxFn(eus):function(c,d){return CK.fx.rate(c,d);};
+    var q=all.slice(),run=function(){var id=q.shift();if(!id)return Promise.resolve();return hist(id).then(function(h){raw[id]=h;done++;ST.progress=done+" / "+all.length;if(repaint)repaint();return run();});};
+    var extra=Promise.all([CK.mkt&&CK.mkt.taux?CK.mkt.taux():null,CK.mkt&&CK.mkt.resume?CK.mkt.resume():null]);
+    return Promise.all([run(),run(),run(),run(),extra]).then(function(x){
+      var series={},missing=[];all.forEach(function(id){var h=raw[id];if(!h||!h.bars.length){if(ids.indexOf(id)>=0)missing.push(id);return;}
+        var ccy=h.bars[h.bars.length-1].currency||(CK.ref.get(id)||{}).currency||"EUR";series[id]=CK.ms.prep(h.bars,h.div,ccy,fx);});
+      var d={ids:ids,series:series,missing:missing,taux:x[4][0],resume:x[4][1]&&x[4][1].items||null};ST.data=d;ST.dataTs=now();return d;});
+  });
+}
+/** Taux sans risque sur 12 mois à la date T : €STR publié le jour ouvré ≤ T (fraction). */
+function rfAt(taux,T){var s=taux&&taux.estr&&taux.estr.serie;if(!s||!Array.isArray(s.d)||!Array.isArray(s.v))return 0;var day=new Date(T).toISOString().slice(0,10),v=null;
+  for(var k=0;k<s.d.length;k++){if(s.d[k]<=day&&fin(s.v[k]))v=s.v[k];}return fin(v)?v/100:0;}
+/** Portefeuille : lignes détenues (valeur, compte, part de plus-value), rendement hebdomadaire composite, contributions au risque. */
+function pfContext(d,T){
+  var out={held:{},pfRet:null,risk:{}};if(!CK.pfc)return out;var P=CK.pfc.load();if(!P.accounts.length)return out;
+  var res=d.resume||{},close=function(id){var r=res[id];return r&&fin(r.c)?{c:r.c,d:r.d}:null;};
+  var V=CK.pfc.value(P,function(id){return CK.mkt&&CK.mkt.last?CK.mkt.last(id):null;},{close:close}),acc={};(V.accounts||[]).forEach(function(a){acc[a.id]=a;});
+  var by={};(V.lines||[]).forEach(function(L){if(!(L.value>0))return;var b=by[L.instrument_id]||(by[L.instrument_id]={value:0,account_type:null,gain_share:0,_v:0});b.value+=L.value;
+    var at=acc[L.account_id]&&acc[L.account_id].account_type;if(L.value>b._v){b._v=L.value;b.account_type=at;b.gain_share=L.price>0&&L.pru!=null?(L.price*(L.fx||1)-L.pru*(L.fxb||L.fx||1))/(L.price*(L.fx||1)):0;}});
+  var tot=Object.keys(by).reduce(function(s,k){return s+by[k].value;},0);if(!(tot>0))return out;out.held=by;
+  // rendement hebdomadaire du portefeuille (lignes mesurées, poids actuels) et contributions au risque
+  var lines=[],agg={},wsum=0;Object.keys(by).forEach(function(id){var S=d.series[id];if(!S)return;var w=by[id].value/tot,r=CK.ms.wret(S,T,156);wsum+=w;
+    Object.keys(r).forEach(function(k){agg[k]=agg[k]||{s:0,w:0};agg[k].s+=w*r[k];agg[k].w+=w;});lines.push({id:id,label:id,w:w,weekly:CK.alloc.weeklyMap(S,T,160)});});
+  if(wsum>0){out.pfRet={};Object.keys(agg).forEach(function(k){if(agg[k].w>=wsum*0.8)out.pfRet[k]=agg[k].s/agg[k].w;});}
+  try{var rk=CK.pfc.risk(lines,0);(rk.contrib||[]).forEach(function(c){if(fin(c.rc))out.risk[c.id]=c.rc;});}catch(e){}
+  return out;
+}
+function compute(d){
+  var p=CK.prefs?CK.prefs.get():null,D=CK.alloc.decision(now()),T=D.T,pc=pfContext(d,T);
+  var R=CK.ms.run({T:T,series:d.series,ids:d.ids,prefs:p&&p.saved?p:null,rf12:rfAt(d.taux,T),held:pc.held,pfRet:pc.pfRet,risk:pc.risk});
+  R.monthLabel=D.monthLabel;R.dataLabel=D.dataLabel;return R;
+}
+function prefsKey(){var p=CK.prefs?CK.prefs.get():null;return JSON.stringify(p||{})+"|"+((CK.pfc&&CK.pfc.load().updated_at)||"");}
+/** Lance le chargement et le calcul si nécessaire. */
+function ensure(force){
+  if(ST.busy)return;var k=prefsKey();if(!force&&ST.R&&ST.key===k&&now()-ST.dataTs<6*36e5)return;
+  ST.busy=true;ST.err=null;if(force)ST.data=null;paint();
+  loadAll(paint).then(function(d){setTimeout(function(){try{ST.R=compute(d);ST.key=k;ST.missing=d.missing;}catch(e){ST.err="Calcul impossible : "+(e&&e.message||e);}ST.busy=false;ST.progress="";paint();},0);},
+    function(e){ST.busy=false;ST.err="Lecture des historiques impossible : "+(e&&e.message||e);paint();});
+}
+
+/* ================================================================
+   DOM : bascule de mode, bloc, événements
+   ================================================================ */
+function $(id){return typeof document!=="undefined"&&document.getElementById?document.getElementById(id):null;}
+function mode(){var m=lsGet("scr:mode");return m==="mensuel"?"mensuel":"crypto";}
+function opts(){if(!ST.o){var o=null;try{o=CK.lsj?CK.lsj("ms:o"):null;}catch(e){o=null;}o=o&&typeof o==="object"?o:{};
+  ST.o={grp:typeof o.grp==="string"?o.grp:"tous",lbl:typeof o.lbl==="string"?o.lbl:"toutes",mine:o.mine===true,sort:typeof o.sort==="string"?o.sort:"score",dir:o.dir==="asc"?"asc":"desc",q:""};}
+  ST.o.peaf=(function(v){return v==="eligibles"||v==="verifier"?v:"tous";})(lsGet("mk:pea"));return ST.o;}
+function saveOpts(){try{if(CK.lsj)CK.lsj("ms:o",{grp:ST.o.grp,lbl:ST.o.lbl,mine:ST.o.mine,sort:ST.o.sort,dir:ST.o.dir});}catch(e){}}
+function toggleHTML(m){return '<div class="seg ms-mode" role="group" aria-label="Mode du screener"><button type="button" data-ms-mode="crypto" aria-pressed="'+(m==="crypto"?"true":"false")+'">Crypto (compression)</button><button type="button" data-ms-mode="mensuel" aria-pressed="'+(m==="mensuel"?"true":"false")+'">Mensuel multi-actifs</button></div>';}
+function applyMode(){
+  var m=mode();if(typeof document==="undefined")return;document.body.setAttribute("data-scrmode",m);
+  [].forEach.call(document.querySelectorAll(".ms-mode button"),function(b){b.setAttribute("aria-pressed",b.getAttribute("data-ms-mode")===m?"true":"false");});
+  if(m==="mensuel"&&seen)ensure(false);
+}
+function injectToggle(){
+  if(typeof document==="undefined")return;var C=CK.cfg?CK.cfg():{};if(C.modules&&C.modules.msmain===false)return;
+  [document.querySelector('[data-mod="screener"] .mhd'),document.querySelector('[data-mod="msmain"] .mhd')].forEach(function(h){if(!h||h.querySelector(".ms-mode"))return;
+    var meta=h.querySelector(".meta"),w=document.createElement("div");w.innerHTML=toggleHTML(mode());h.insertBefore(w.firstChild,meta||null);});
+}
+var paintQ=false;
+function paint(){if(paintQ)return;paintQ=true;setTimeout(function(){paintQ=false;var b=$("msBody");if(!b||mode()!=="mensuel")return;var p=CK.prefs?CK.prefs.get():{};
+  var focus=document.activeElement&&document.activeElement.getAttribute&&document.activeElement.getAttribute("data-ms")==="q";
+  b.innerHTML=viewHTML({R:ST.R,busy:ST.busy,err:ST.err,progress:ST.progress,o:opts(),prefs:p,open:ST.open,monthLabel:ST.R&&ST.R.monthLabel,dataLabel:ST.R&&ST.R.dataLabel,missing:ST.missing});
+  var meta=$("msMeta");if(meta)meta.textContent=ST.R?ST.R.rows.filter(function(r){return r.label==="RENFORCER";}).length+" à renforcer · "+ST.R.rows.filter(function(r){return r.label==="RÉDUIRE";}).length+" à réduire":"";
+  if(focus){var q=b.querySelector('[data-ms="q"]');if(q){q.focus();var n=q.value.length;try{q.setSelectionRange(n,n);}catch(e){}}}},30);}
+function onClick(e){
+  var t=e.target;if(!t||!t.closest)return;var mm=t.closest("[data-ms-mode]");
+  if(mm){lsSet("scr:mode",mm.getAttribute("data-ms-mode"));applyMode();if(mode()==="mensuel"){seen=true;ensure(false);paint();}return;}
+  var b=t.closest("[data-ms]");if(!b||!$("msBody")||!$("msBody").contains(b))return;var a=b.getAttribute("data-ms"),id=b.getAttribute("data-id"),o=opts();
+  if(b.tagName==="TR"&&t.closest("button,a"))return;
+  switch(a){
+    case "open":ST.open[id]=!ST.open[id];paint();return;
+    case "grp":o.grp=id;saveOpts();paint();return;
+    case "lbl":o.lbl=id;saveOpts();paint();return;
+    case "peaf":lsSet("mk:pea",id);paint();return;
+    case "sort":if(o.sort===id)o.dir=o.dir==="asc"?"desc":"asc";else{o.sort=id;o.dir=id==="nom"||id==="label"?"asc":"desc";}saveOpts();paint();return;
+    case "run":ensure(true);return;
+    case "prefs":if(CK.prefs)CK.prefs.open();return;
+    case "fiche":if(CK.mk&&CK.mk.fiche)CK.mk.fiche(id);return;
+  }
+}
+function build(){
+  if(built||typeof document==="undefined")return;built=true;injectToggle();applyMode();
+  document.addEventListener("click",onClick);
+  var b=$("msBody");if(b){b.addEventListener("input",function(e){if(e.target&&e.target.getAttribute("data-ms")==="q"){opts().q=e.target.value;paint();}});
+    b.addEventListener("change",function(e){if(e.target&&e.target.getAttribute("data-ms")==="mine"){opts().mine=!!e.target.checked;saveOpts();paint();}});
+    b.addEventListener("keydown",function(e){if(e.key!=="Enter"||!e.target.closest)return;var r=e.target.closest("tr[data-ms]");if(r){e.preventDefault();ST.open[r.getAttribute("data-id")]=!ST.open[r.getAttribute("data-id")];paint();}});}
+}
+function onView(on){if(on){seen=true;build();injectToggle();applyMode();if(mode()==="mensuel")ensure(false);}}
+function open(){lsSet("scr:mode","mensuel");if(CK.layout&&CK.layout.show)CK.layout.show("screener");build();applyMode();seen=true;ensure(false);paint();}
+
+CK.msui={
+  boot:function(){if(CK.onView)CK.onView("screener",onView);build();
+    var prev=CK.onPrefs;CK.onPrefs=function(p){if(typeof prev==="function")try{prev(p);}catch(e){}if(seen&&mode()==="mensuel")ensure(false);};},
+  open:open,mode:mode,rows:function(){return ST.R?ST.R.rows:[];},state:function(){return {busy:ST.busy,err:ST.err,n:ST.R?ST.R.rows.length:0,mode:mode()};},
+  _t:{viewHTML:viewHTML,filterRows:filterRows,detailHTML:detailHTML,tableHTML:tableHTML,toggleHTML:toggleHTML,groupOf:groupOf,rfAt:rfAt,universe:universe,refIds:refIds,pfContext:pfContext,
+    reset:function(){ST={R:null,busy:false,err:null,progress:"",data:null,dataTs:0,key:"",o:null,open:{}};seen=false;}}
+};
 })();
 
 /* ================================================================
@@ -10845,6 +11371,11 @@ CK.sound={
       </div>
       <div class="empty" id="scanState" hidden></div>
     </div>
+  </section>
+
+  <section class="mod" data-mod="msmain">
+    <header class="mhd"><span class="mno"></span><h2>Screener mensuel</h2><span class="meta" id="msMeta"></span></header>
+    <div class="card"><div id="msBody" class="ms-body"></div></div>
   </section>
 
   <section class="mod" data-mod="news">

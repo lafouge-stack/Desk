@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const rd = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
-const JS = ["core", "models", "datakit", "fx", "calendars", "pea", "providers", "indicators", "bg", "layout", "day", "signals", "liqmap", "pos", "extra", "screener", "ui", "net", "veille", "markets", "pfcore", "selection", "allocation", "prefs", "allocui", "portfolio", "worlds", "sound"].map((f) => `${f}.js`);
+const JS = ["core", "models", "datakit", "fx", "calendars", "pea", "providers", "indicators", "bg", "layout", "day", "signals", "liqmap", "pos", "extra", "screener", "ui", "net", "veille", "markets", "pfcore", "selection", "allocation", "prefs", "allocui", "mscreen", "msui", "portfolio", "worlds", "sound"].map((f) => `${f}.js`);
 const CSS = ["style.css", "worlds.css"];
 
 // Le manuel de l'agent (agent-manuel.md) est inséré dans veille.js

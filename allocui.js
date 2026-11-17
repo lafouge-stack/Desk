@@ -206,7 +206,10 @@ function loadData(p,heldCrypto){
     var cj=cids.filter(function(id){return ids.indexOf(id)<0;}).map(function(id){return hist(id,{});});
     return Promise.all(jobs.concat(cj)).then(function(all){
       var raw={},series={};ids.forEach(function(id,k){raw[id]=all[k];});cids.filter(function(id){return ids.indexOf(id)<0;}).forEach(function(id,k){raw[id]=all[ids.length+k];});
-      var conv=function(id){var b=raw[id]||[];if(!b.length)return null;var ccy=b[b.length-1].currency||"EUR";var S=A().eurSeries(b,id===(cfg().regime||{}).vix?"EUR":ccy,fx);return S.t.length?S:null;};
+      // séries en euros, dividendes réinvestis à leur date de détachement (ETF distribuants, actions) ; le VIX est un niveau, pas un prix
+      var conv=function(id){var b=raw[id]||[];if(!b.length)return null;var ccy=b[b.length-1].currency||"EUR",isVix=id===(cfg().regime||{}).vix,div=null;
+        if(!isVix)try{var ev=CK.mkt.adapters().hist.events(CK.ref.get(id));div=ev&&ev.div||null;}catch(e){div=null;}
+        var S=div&&div.length&&CK.ms?CK.ms.prep(b,div,ccy,fx):A().eurSeries(b,isVix?"EUR":ccy,fx);return S.t.length?S:null;};
       var C=cfg(),px=C.proxies||{};A().poches().forEach(function(q){var x=px[q.id];if(x&&x.id&&raw[x.id])series[q.id]=conv(x.id);});
       var vols={};cids.forEach(function(id){var S=conv(id);if(S&&S.t.length>130)vols[id]=CK.ind.vol(S.t,S.c,120,null,365);});
       var resume=null,closes={};if(res&&typeof res==="object"){resume={};Object.keys(res).forEach(function(k){var r=res[k];if(r&&typeof r==="object"){resume[k]={d:r.d,first:r.first,n:r.n};if(fin(r.c))closes[k]=r.c;}});}

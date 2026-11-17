@@ -79,9 +79,20 @@ function summary(t,c,perYear,diff){
     mdd1y:diff?null:maxDD(t,c,T-365*DAY,T),mdd5y:!diff&&t[0]<=minusMonths(T,60)?maxDD(t,c,minusMonths(T,60),T):null,
     hi52:r?r.hi:null,lo52:r?r.lo:null,n:t.length,first:ymd(t[0]),spark:weekly(t,c,52,T).map(function(x){return x[1];})};
 }
+/**
+ * Clôtures « dividendes réinvestis » (rendement total) : chaque dividende [t, montant] (même devise que les cours, date de
+ * détachement) est réinvesti ce jour-là, au facteur 1 + montant / clôture de la veille. Rien ne change avant sa date
+ * (point-in-time). Sans dividende : copie des clôtures.
+ */
+function totalReturn(t,c,div){
+  var out=c.slice();if(!Array.isArray(div)||!div.length)return out;
+  var ev=div.filter(function(d){return Array.isArray(d)&&fin(d[0])&&fin(d[1])&&d[1]>0;}).sort(function(a,b){return a[0]-b[0];}),f=1,j=0;
+  for(var k=0;k<t.length;k++){while(j<ev.length&&ev[j][0]<=t[k]){if(k>0&&c[k-1]>0)f*=1+ev[j][1]/c[k-1];j++;}out[k]=c[k]*f;}
+  return out;
+}
 /** Arrondi à `sig` chiffres significatifs (fichiers plus légers, précision largement suffisante). */
 function round(v,sig){if(!fin(v)||v===0)return v;var p=Math.pow(10,(sig||6)-Math.ceil(Math.log10(Math.abs(v))));return Math.round(v*p)/p;}
 
 CK.ind={idxAt:idxAt,ymd:ymd,minusMonths:minusMonths,ret:ret,perfs:perfs,PERIODS:PERIODS,annualize:annualize,logRets:logRets,
-  vol:vol,maxDD:maxDD,weekly:weekly,range52:range52,summary:summary,round:round};
+  vol:vol,maxDD:maxDD,weekly:weekly,range52:range52,summary:summary,round:round,totalReturn:totalReturn};
 })();

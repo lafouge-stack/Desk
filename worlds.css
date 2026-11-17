@@ -1703,3 +1703,68 @@ tr.pf-err td{opacity:.7}tr.pf-err td:first-child{box-shadow:inset 3px 0 0 var(--
   .al-br{grid-template-columns:minmax(80px,110px) 1fr 54px;gap:6px}}
 @container (max-width:480px){.al-table th:nth-child(4),.al-table td:nth-child(4){display:none}.al-ord li{grid-template-columns:60px 1fr auto}.al-ord .al-nm{display:none}}
 @media (max-width:600px){.pr-tree,.pr-chips,.pr-profs,.pr-radios,.pr-wgrid{grid-template-columns:1fr}.pr-cl.d1{padding-left:18px}.pr-cl.d2{padding-left:36px}}
+
+/* ================================================================
+   Phase 6 — Screener mensuel multi-actifs (ms-)
+   ================================================================ */
+/* bascule : en mode mensuel, le screener crypto est masqué (pas modifié) ; sinon le bloc mensuel est masqué */
+body[data-scrmode="mensuel"] .mod[data-mod="screener"],body:not([data-scrmode="mensuel"]) .mod[data-mod="msmain"]{display:none!important}
+.ms-mode{flex:0 0 auto}.ms-mode button{white-space:nowrap}
+.mhd .ms-mode{margin-left:auto}.mhd .ms-mode+.meta{margin-left:10px}
+.ms-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:10px;margin:0 0 10px}
+.ms-head h3{margin:0;font:600 16px var(--font);color:var(--text)}.ms-head p{margin:3px 0 0;font:500 12px/1.45 var(--font);color:var(--muted)}
+.ms-acts{display:flex;gap:8px;flex-wrap:wrap}
+.ms-bar{display:flex;flex-direction:column;gap:8px;margin:0 0 10px}
+.ms-bar .seg{flex-wrap:wrap}.ms-bar .seg em{font-style:normal;opacity:.6;font-size:.9em}
+.ms-bar2{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ms-chk{display:flex;align-items:center;gap:6px;font:500 12.5px var(--font);color:var(--text);cursor:pointer}
+.ms-chk input{accent-color:var(--wc,var(--accent))}
+.ms-q{height:32px;padding:0 10px;border:0;border-radius:8px;background:var(--solid);box-shadow:inset 0 0 0 1px var(--line-2);color:var(--text);font:500 13px var(--font);min-width:0;flex:1 1 160px;max-width:260px}
+.ms-table td{vertical-align:middle}
+.ms-sort{all:unset;cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit}.ms-sort.on{color:var(--text)}
+.ms-sort:focus-visible{outline:2px solid var(--wc,var(--accent));outline-offset:2px;border-radius:3px}
+.ms-sc{display:inline-block;min-width:34px;padding:2px 6px;border-radius:6px;text-align:center;font:600 12px var(--mono);color:var(--text);
+  background:linear-gradient(90deg,color-mix(in oklab,var(--wc,var(--accent)) 30%,transparent) calc(var(--v)*1%),var(--solid) 0)}
+.ms-sc.ms-na{background:none;color:var(--faint)}
+.ms-chop{white-space:nowrap}.ms-chop em{display:block;font:500 10.5px var(--font);color:var(--faint);font-style:normal}
+.ms-held{font-style:normal;color:var(--wc,var(--accent));font-size:9px;vertical-align:middle}
+.ms-ex{white-space:normal!important;min-width:180px;font:500 12px/1.4 var(--font);color:var(--muted)}
+.ms-lbl{display:inline-block;padding:2px 8px;border-radius:6px;font:600 11px var(--font);white-space:nowrap;background:var(--solid);box-shadow:inset 0 0 0 1px var(--line-2);color:var(--text)}
+.ms-up{box-shadow:inset 3px 0 0 var(--up),inset 0 0 0 1px var(--line-2)}.ms-down{box-shadow:inset 3px 0 0 var(--down),inset 0 0 0 1px var(--line-2)}
+.ms-sw,.ms-watch{box-shadow:inset 3px 0 0 var(--warn),inset 0 0 0 1px var(--line-2)}.ms-out,.ms-none{color:var(--faint)}
+.ms-row.on td{background:color-mix(in oklab,var(--wc,var(--accent)) 8%,transparent)}
+.flow .ms-det td,.ms-det td{padding:0 0 4px;white-space:normal}
+.ms-detb{padding:12px 14px;border-radius:0 0 10px 10px;background:color-mix(in oklab,var(--wc,var(--accent)) 5%,var(--solid))}
+.ms-subs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 14px;margin:0 0 12px}
+.ms-subs div{display:grid;grid-template-columns:1fr 34px;align-items:center;gap:3px 8px}
+.ms-subs em{grid-column:1/-1;font:500 11.5px var(--font);color:var(--muted);font-style:normal}
+.ms-subs i{display:block;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--wc,var(--accent)) calc(var(--v)*1%),var(--line-2) 0)}
+.ms-subs b{font:600 12px var(--mono);text-align:right}
+.ms-kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 16px}
+.ms-kv div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ms-kv em{font:500 11px var(--font);color:var(--faint);font-style:normal}.ms-kv b{font:600 12.5px var(--font);color:var(--text)}
+.ms-why{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 4px;font:500 12.5px/1.5 var(--font);color:var(--text)}
+.ms-meth ul{margin:8px 0;padding-left:18px;font:500 12.5px/1.55 var(--font);color:var(--text)}.ms-meth p{font:500 12.5px/1.55 var(--font);color:var(--muted)}
+@container (max-width:900px){.ms-table th:nth-child(11),.ms-table td:nth-child(11){display:none}}
+@container (max-width:700px){.ms-table th:nth-child(n+3):nth-child(-n+8),.ms-table td:nth-child(n+3):nth-child(-n+8){display:none}}
+@container (max-width:480px){.ms-table th:nth-child(9),.ms-table td:nth-child(9){display:none}.ms-table .mk-nm span{display:none}}
+@container (max-width:480px){.ms-table td.ms-ex{display:none}}
+@media (max-width:600px){.mhd .ms-mode button{padding:0 8px;font-size:11px}}
+/* screener mensuel : conteneur mesuré, tableau qui défile, colonnes masquées sur écran étroit (préfixe .flow : l'emporte sur .flow .scan) */
+.mod[data-mod="msmain"] .card{container-type:inline-size}
+.ms-body .tbl-wrap{overflow-x:auto}
+.ms-table thead th{position:static}
+.flow .ms-table td,.ms-table td{padding:9px 8px;font-size:13px}
+.flow .ms-table th,.ms-table th{padding:9px 8px}
+.ms-kv{grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),1fr))}
+.ms-subs{grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr))}
+@container (max-width:900px){.flow .ms-table th:nth-child(11),.flow .ms-table td:nth-child(11){display:none}}
+@container (max-width:700px){.flow .ms-table th:nth-child(n+3):nth-child(-n+8),.flow .ms-table td:nth-child(n+3):nth-child(-n+8){display:none}}
+@container (max-width:480px){.flow .ms-table th:nth-child(9),.flow .ms-table td:nth-child(9){display:none}.flow .ms-table .mk-nm span{display:none}}
+@container (max-width:700px){.flow .ms-det td{display:table-cell!important}}
+/* les règles étroites du screener crypto (.scan, colonnes 4 à 13) ne s'appliquent pas au tableau mensuel : on rétablit, puis on masque les nôtres */
+.flow .ms-table th,.flow .ms-table td{display:table-cell}
+@container (max-width:900px){.flow .ms-table th:nth-child(11),.flow .ms-table td:nth-child(11){display:none}}
+@container (max-width:700px){.flow .ms-table th:nth-child(n+3):nth-child(-n+8),.flow .ms-table td:nth-child(n+3):nth-child(-n+8){display:none}}
+@container (max-width:480px){.flow .ms-table th:nth-child(9),.flow .ms-table td:nth-child(9){display:none}}
+.flow .ms-table tr.ms-det>td{display:table-cell}

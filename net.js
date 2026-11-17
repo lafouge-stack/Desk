@@ -12,7 +12,7 @@ var DEST=[
   {id:"bandeau",name:"Bandeau & alertes",sub:"prix, alertes de prix",c:"#C4C8CF"},
   {id:"journee",name:"Journée",sub:"sessions, agenda, dérivés",c:"#E9C46A"},
   {id:"signaux",name:"Signaux",sub:"10 indicateurs",c:"#7FA8F0"},
-  {id:"screener",name:"Screener",sub:"setups, graphiques",c:"#FF8A3D"},
+  {id:"screener",name:"Screener",sub:"setups, graphiques, mensuel",c:"#FF8A3D"},
   {id:"liq",name:"Liquidations",sub:"flux, carte, top 24 h",c:"#F07384"},
   {id:"news",name:"News",sub:"flux macro, agenda",c:"#A99BEA"},
   {id:"veille",name:"Agent",sub:"scalp, analyste, IA",c:"#B8F36B"},
@@ -55,9 +55,9 @@ var SRC=[
    freq:"1 appel groupé par minute, seulement quand l'espace Marchés ou Portefeuille est ouvert (4 par minute au plus)"},
   {id:"fx",name:"BCE (Frankfurter)",p:"REST",kind:"od",to:["marches","portefeuille"],ep:["api.frankfurter.dev/v1/latest?base=EUR","api.frankfurter.dev/v1/AAAA-MM-JJ..?base=EUR"],
    data:"Taux de change de référence de la BCE : conversion des cours en euros.",freq:"À la première ouverture de l'espace Marchés"},
-  {id:"robotdata",name:"Robot (historiques)",p:"JSON",kind:"od",to:["marches","portefeuille"],ep:["…github.io/Desk/data/marches-meta.json","…/data/resume.json","…/data/taux.json","…/data/hist/…json"],
+  {id:"robotdata",name:"Robot (historiques)",p:"JSON",kind:"od",to:["marches","portefeuille","screener"],ep:["…github.io/Desk/data/marches-meta.json","…/data/resume.json","…/data/taux.json","…/data/hist/…json"],
    data:"Historiques quotidiens sur 15 ans (Yahoo Finance, FRED, BCE), résumé des performances, courbes de taux et €STR, publiés par ton robot GitHub (branche donnees) : graphiques et statistiques des fiches.",freq:"Résumé et taux à l'ouverture des Marchés, historique à l'ouverture d'une fiche ; mis à jour plusieurs fois par jour par GitHub"},
-  {id:"binhist",name:"Binance (historique)",p:"REST",kind:"od",to:["marches","portefeuille"],ep:["data-api.binance.vision/api/v3/klines"],
+  {id:"binhist",name:"Binance (historique)",p:"REST",kind:"od",to:["marches","portefeuille","screener"],ep:["data-api.binance.vision/api/v3/klines"],
    data:"Historique quotidien des cryptos : graphiques des fiches et risques du portefeuille.",freq:"À la demande (fiche, onglet Risques)"},
   {id:"tr",name:"Traduction",p:"REST",kind:"od",to:["news"],ep:["translate.googleapis.com (gtx)","api.mymemory.translated.net (secours)"],data:"Titres de news traduits en français.",freq:"À chaque nouvelle news"}
 ];
