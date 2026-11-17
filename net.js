@@ -54,8 +54,8 @@ var SRC=[
    freq:"1 appel groupé par minute, seulement quand l'espace Marchés est ouvert (4 par minute au plus)"},
   {id:"fx",name:"BCE (Frankfurter)",p:"REST",kind:"od",to:["marches"],ep:["api.frankfurter.dev/v1/latest?base=EUR","api.frankfurter.dev/v1/AAAA-MM-JJ..?base=EUR"],
    data:"Taux de change de référence de la BCE : conversion des cours en euros.",freq:"À la première ouverture de l'espace Marchés"},
-  {id:"robotdata",name:"Robot (historiques)",p:"JSON",kind:"od",to:["marches"],ep:["…github.io/Desk/data/marches-meta.json","…/data/hist/…json"],
-   data:"Historiques quotidiens publiés par ton robot GitHub (à venir : graphiques et performances).",freq:"À la demande"},
+  {id:"robotdata",name:"Robot (historiques)",p:"JSON",kind:"od",to:["marches"],ep:["…github.io/Desk/data/marches-meta.json","…/data/resume.json","…/data/taux.json","…/data/hist/…json"],
+   data:"Historiques quotidiens sur 15 ans (Yahoo Finance, FRED, BCE), résumé des performances, courbes de taux et €STR, publiés par ton robot GitHub (branche donnees) : graphiques et statistiques des fiches.",freq:"Résumé et taux à l'ouverture des Marchés, historique à l'ouverture d'une fiche ; mis à jour plusieurs fois par jour par GitHub"},
   {id:"binhist",name:"Binance (historique)",p:"REST",kind:"od",to:["marches"],ep:["data-api.binance.vision/api/v3/klines"],
    data:"Historique quotidien des cryptos pour les calculs multi-actifs (à venir).",freq:"À la demande"},
   {id:"tr",name:"Traduction",p:"REST",kind:"od",to:["news"],ep:["translate.googleapis.com (gtx)","api.mymemory.translated.net (secours)"],data:"Titres de news traduits en français.",freq:"À chaque nouvelle news"}

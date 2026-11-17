@@ -1434,3 +1434,35 @@ table.mk-table{min-width:0}
 .ln-disc{margin:8px 0 0;text-align:center;font:500 11px/1.4 var(--font);color:var(--faint)}
 .foot-disc{flex-basis:100%;margin:6px 0 0;font:500 11px/1.5 var(--font);color:var(--faint)}
 @media (max-width:760px){.mk-fcols{grid-template-columns:1fr}.mk-perf{grid-template-columns:repeat(3,minmax(0,1fr))}.mk-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.mk-fpx b{font-size:28px}}
+/* Marchés · historiques (phase 3) */
+.mk-spark{display:block;overflow:visible}
+.mk-spark polyline{fill:none;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.mk-spark.up polyline{stroke:var(--up)}.mk-spark.down polyline{stroke:var(--down)}
+.mk-sp{width:96px}
+.mk-hist{padding:14px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line)}
+.mk-hh{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.mk-hh h4{margin:0;font:600 11px var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.mk-chart{height:260px;margin-bottom:10px}
+.mk-chart[hidden]{display:none}
+.mk-perf8{grid-template-columns:repeat(8,minmax(0,1fr));margin:0 0 10px}
+.mk-perf b small{display:block;font:500 10.5px var(--mono);color:var(--faint)}
+.mk-taux{margin:4px 0 14px}
+.mk-taux h4{margin:0 0 8px;font:600 11px var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.mk-taux h4 em{margin-left:6px;font-style:normal;text-transform:none;letter-spacing:0;color:var(--faint)}
+.mk-taux .mk-sprg{margin-bottom:10px}
+.mk-curves{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.mk-cbox{margin:0;padding:12px;border-radius:12px;background:var(--inset);box-shadow:inset 0 0 0 1px var(--line)}
+.mk-cbox figcaption{font:600 12.5px var(--font);margin-bottom:6px}
+.mk-cbox figcaption em{font:500 11px var(--font);font-style:normal;color:var(--faint);margin-left:6px}
+.mk-curve{display:block;width:100%;height:auto}
+.mk-cg{stroke:var(--line);stroke-width:1}
+.mk-cl{fill:var(--faint);font:500 11px var(--mono)}
+.mk-curve polyline{fill:none;stroke-width:2;stroke-linejoin:round}
+.mk-c-now{stroke:var(--wc,var(--accent))}
+.mk-c-m1{stroke:var(--muted);stroke-dasharray:4 3;stroke-width:1.5!important}
+.mk-c-y1{stroke:var(--faint);opacity:.6;stroke-width:1.5!important}
+.mk-leg{display:flex;gap:14px;margin:6px 0 0;font:500 11px var(--font);color:var(--faint)}
+.mk-leg span::before{content:"";display:inline-block;width:16px;height:2px;margin-right:6px;vertical-align:middle;background:var(--faint)}
+.mk-leg .mk-l-now::before{background:var(--wc,var(--accent))}
+.mk-leg .mk-l-m1::before{background:repeating-linear-gradient(90deg,var(--muted) 0 4px,transparent 4px 7px)}
+@media (max-width:760px){.mk-perf8{grid-template-columns:repeat(4,minmax(0,1fr))}.mk-chart{height:220px}}

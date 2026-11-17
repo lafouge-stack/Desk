@@ -1,0 +1,43 @@
+name: Données des marchés
+
+# Plusieurs fois par jour : met à jour les historiques quotidiens (Yahoo, FRED, BCE), le résumé des
+# performances, les courbes de taux et les fixings BCE, dans la branche « donnees » (un seul commit, remplacé
+# à chaque passage). Séparé du robot des 10 minutes (desk.yml), qui copie ensuite ces fichiers dans le site.
+# Une erreur ici ne bloque jamais la publication des news et de l'agenda.
+on:
+  schedule:
+    - cron: "40 7,12,17,22 * * 1-5"
+    - cron: "40 9 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: donnees
+  cancel-in-progress: false
+
+jobs:
+  historiques:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Reprendre les fichiers déjà publiés (branche donnees)
+        run: |
+          mkdir -p donnees
+          if git fetch --depth=1 origin donnees; then git archive FETCH_HEAD | tar -x -C donnees; else echo "Première publication"; fi
+      - name: Mettre à jour les historiques (au plus 15 complets et 60 courts par passage)
+        run: node histo.mjs donnees
+      - name: Publier dans la branche donnees
+        run: |
+          cd donnees
+          git init -q -b donnees
+          git config user.name "robot-donnees"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Historiques $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" donnees:donnees

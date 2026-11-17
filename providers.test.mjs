@@ -551,3 +551,66 @@ test("vrai datakit : 404 du robot reconnu et mémorisé ; 400 de Binance → [] 
   assert.equal(calls.filter((c) => c.url.includes("binance")).length, 1, "400 : pas de nouvel essai");
   eq(await mkt.quotes(["tv:TVC:GOLD"]), {}, "réponse invalide : aucune cotation, aucun rejet");
 });
+
+/* ---------- Phase 3 : version par fichier, IndexedDB, résumé et taux ---------- */
+function fakeIdb() { const m = new Map(); return { m, get: async (s, k) => m.get(s + "|" + k), put: async (s, k, v) => { m.set(s + "|" + k, JSON.parse(JSON.stringify(v))); return k; } }; }
+const META3 = { v: 9, files: { isin_LU1681043599: { last: "2026-02-02", n: 4 }, tv_SP_SPX: { last: "2026-11-16", n: 3770 } } };
+
+test("robot : version propre à chaque fichier (dernière séance + nombre de séances) dans la clé de cache", async () => {
+  const { mkt, M, dk } = setup((url) => url.endsWith("marches-meta.json") ? META3 : HIST);
+  const cw8 = I(M, { id: "isin:LU1681043599", vehicle: "etf", tickers: { tv: "EURONEXT:CW8" } });
+  await mkt.history(cw8);
+  assert.equal(dk.calls[1].cacheKey, "GET https://robot.example/data/hist/isin_LU1681043599.json#2026-02-02.4");
+});
+
+test("robot : copie IndexedDB réutilisée tant que la version ne change pas (aucun téléchargement), puis renouvelée", async () => {
+  const idb = fakeIdb();
+  const a = setup((url) => url.endsWith("marches-meta.json") ? META3 : HIST); a.dk.idb = idb;
+  const cw8 = I(a.M, { id: "isin:LU1681043599", vehicle: "etf", tickers: { tv: "EURONEXT:CW8" } });
+  assert.equal((await a.mkt.history(cw8)).length, 4);
+  await settle();
+  assert.ok(idb.m.has("bars|https://robot.example/data/hist/isin_LU1681043599.json"), "copie enregistrée");
+  // nouvelle session (page rechargée) : même version → lu dans IndexedDB
+  const b = setup((url) => { if (url.endsWith("marches-meta.json")) return META3; throw new Error("téléchargement inattendu"); }); b.dk.idb = idb;
+  const bars = await b.mkt.history(I(b.M, { id: "isin:LU1681043599", vehicle: "etf", tickers: { tv: "EURONEXT:CW8" } }));
+  assert.equal(bars.length, 4); assert.equal(b.dk.calls.length, 1, "seulement marches-meta.json");
+  // le robot a publié une séance de plus → nouveau téléchargement
+  const META4 = { v: 10, files: { isin_LU1681043599: { last: "2026-02-03", n: 5 } } };
+  const c = setup((url) => url.endsWith("marches-meta.json") ? META4 : HIST); c.dk.idb = idb;
+  await c.mkt.history(I(c.M, { id: "isin:LU1681043599", vehicle: "etf", tickers: { tv: "EURONEXT:CW8" } }));
+  assert.equal(c.dk.calls.length, 2);
+});
+
+test("robot : copie IndexedDB invalide ou IndexedDB en panne → téléchargement normal", async () => {
+  const idb = { get: async () => ({ ver: "2026-02-02.4", data: { t: [1], c: [] } }), put: async () => { throw new Error("quota"); } };
+  const a = setup((url) => url.endsWith("marches-meta.json") ? META3 : HIST); a.dk.idb = idb;
+  const bars = await a.mkt.history(I(a.M, { id: "isin:LU1681043599", vehicle: "etf", tickers: { tv: "EURONEXT:CW8" } }));
+  assert.equal(bars.length, 4); assert.equal(a.dk.calls.length, 2);
+});
+
+test("robot : marches-meta.json relu au plus une fois par heure", async () => {
+  const { mkt, M, dk } = setup((url) => url.endsWith("marches-meta.json") ? META3 : HIST);
+  const cw8 = I(M, { id: "isin:LU1681043599", vehicle: "etf", tickers: { tv: "EURONEXT:CW8" } });
+  await mkt.history(cw8); await mkt.history(cw8);
+  assert.equal(dk.calls.filter((c) => c.url.endsWith("marches-meta.json")).length, 1);
+  dk.t += 61 * 60000;
+  await mkt.history(cw8);
+  assert.equal(dk.calls.filter((c) => c.url.endsWith("marches-meta.json")).length, 2);
+});
+
+test("résumé et taux du robot : bonnes adresses, null si absents ou invalides, jamais de rejet", async () => {
+  const { mkt, dk } = setup((url) => {
+    if (url.endsWith("/data/resume.json")) return { v: 3, items: { "isin:LU1681043599": { d: "2026-11-16", c: 706.39, p: { y1: 0.17 } } } };
+    if (url.endsWith("/data/taux.json")) return { estr: { d: "2026-11-16", v: 2.44 } };
+    throw notFound();
+  });
+  const r = await mkt.resume();
+  assert.equal(r.items["isin:LU1681043599"].c, 706.39);
+  assert.equal((await mkt.taux()).estr.v, 2.44);
+  assert.ok(dk.calls.every((c) => c.provider === "robotdata"));
+  const b = setup((url) => { if (url.endsWith("resume.json")) return { items: "pas un objet" }; throw notFound(); });
+  assert.equal(await b.mkt.resume(), null);
+  assert.equal(await b.mkt.taux(), null);
+  const c = setup(() => ({}), { data: "" });
+  assert.equal(await c.mkt.resume(), null);
+});

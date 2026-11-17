@@ -33,6 +33,9 @@ jobs:
         run: node robot.mjs
         env:
           SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+      - name: Historiques des marchés (branche donnees, mise à jour par donnees.yml)
+        run: |
+          if git fetch --depth=1 origin donnees; then mkdir -p site/data && git archive FETCH_HEAD | tar -x -C site/data && echo "Historiques copiés"; else echo "Pas encore de branche donnees"; fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

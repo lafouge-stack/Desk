@@ -135,6 +135,7 @@ function lv(t){return esc(String(t||"")).replace(/\[([\d\s.,  ]+)\]/g,'<span 
 var LWC_URL=["https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js","https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"],lwcP=null;
 function loadLWC(){if(window.LightweightCharts)return Promise.resolve();if(lwcP)return lwcP;
   lwcP=new Promise(function(ok,ko){var i=0;(function essai(){var sc=document.createElement("script");sc.src=LWC_URL[i];sc.async=true;sc.onload=function(){ok();};sc.onerror=function(){sc.remove();i++;if(i<LWC_URL.length)essai();else{lwcP=null;ko(new Error("graphiques indisponibles"));}};document.head.appendChild(sc);})();});return lwcP;}
+CK.loadLWC=loadLWC;   // partagé avec l'espace Marchés (graphiques des fiches)
 var TZ=function(){return -new Date().getTimezoneOffset()*60;};
 function couleur(v,d){var x=host?getComputedStyle(host).getPropertyValue(v).trim():"";return x||d;}
 function chart(b){

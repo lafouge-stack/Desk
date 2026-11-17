@@ -46,12 +46,15 @@ Un petit robot GitHub (`robot.mjs`) publie toutes les 10 minutes ce que le navig
 | `calendars.js` | Séances et jours fériés `CK.cal` (Euronext, Xetra, NYSE, crypto), calculés par règle (Pâques…), heure d'été gérée. |
 | `pea.js` | Éligibilité PEA et PEA-PME `CK.pea` : `status`, `pmeStatus`, `allowedIn` (ce qu'un compte accepte), corrections de l'utilisateur (`setOverride`, `exportOverrides`), `alternatives`. |
 | `providers.js` | Sources de marché `CK.mkt` : `quotes`, `history`, `subscribe`, `status`. Cotations via le scanner TradingView (un seul POST groupé, `?label-product=desk-marches`, au plus 4 par minute, rien si l'onglet est caché, pause si le crypto a reçu un 429), crypto lue dans le flux OKX existant, historiques du robot et de Binance. |
+| `indicators.js` | Calculs sur historiques `CK.ind` (performances 1 sem à 10 ans, depuis janvier, volatilité, perte maximale, clôtures hebdomadaires, `summary`), **point-in-time** (rien après la date T). Partagé par la page et par le robot `histo.mjs` (mêmes chiffres partout). |
 | `referentiel.json` | **Les instruments suivis** (ETF, actions, indices, taux, devises, crypto) avec ISIN, tickers TradingView/Yahoo, classe, zone d'exposition, statut PEA + source + date. Tous vérifiés le 16/11/2026 (tickers, ISIN, devises). |
 | `allocation.json` | Poches, profils d'exemple (poids, volatilité cible), pondérations des scores, seuils du screener mensuel, coûts par type de compte, séries de référence. |
 | `fiscal.json` | Règles fiscales indicatives datées et sourcées (PFU, prélèvements sociaux 18,6 % en 2026, PEA 5 ans, PEA-PME, assurance-vie, crypto). |
 | `vmkit.mjs` | Kit de test : charge les fichiers du navigateur dans Node (faux `window`, `document`, `localStorage`, minuteries qui ne tournent pas). Fournit aussi des bougies de test déterministes (`candles`). |
 | `*.test.mjs` | Tests automatiques (`node --test "*.test.mjs"`, aucune installation). `golden-chop.test.mjs` + `golden-chop.json` : valeurs de référence du screener crypto (CHOP, RSI, ATR %, metrics), à ne jamais régénérer sans raison. `build.test.mjs` : le build réussit et contient tous les fichiers. |
 | `.github/workflows/tests.yml` | Lance les tests à chaque envoi sur GitHub. Séparé du robot : un test en échec ne bloque jamais la publication des news. Vérifie aussi que `index.html` a bien été reconstruit avant l'envoi. |
+| `histo.mjs` | **Robot des historiques** (Node) : historiques quotidiens sur 15 ans (Yahoo ; FRED pour le 2 ans US ; BCE mensuel pour les 10 ans France, Allemagne, Italie), nettoyage documenté (pics isolés, ruptures impossibles, séries incohérentes ou arrêtées refusées), `resume.json` (performances, courbe d'un an), `taux.json` (€STR, taux de dépôt, courbes zone euro et US), `fx.json`. Mise à jour pilotée par l'état (`marches-meta.json`) : au plus 15 historiques complets et 60 mises à jour courtes par passage. `node histo.mjs dossier --tout` = amorçage complet en local. |
+| `.github/workflows/donnees.yml` | Lance `histo.mjs` 4 fois par jour en semaine (et le samedi) et publie le résultat dans la branche **`donnees`** (un seul commit, remplacé à chaque passage). `desk.yml` copie ensuite cette branche dans `site/data/` toutes les 10 minutes. Séparé du robot : une erreur ici ne bloque jamais les news. |
 | `desk-news-worker.js` | **Le relais Cloudflare** (code de l'agent et des news Telegram). Il ne tourne pas dans le navigateur : il se déploie sur Cloudflare Workers (voir plus bas). Aucune clé dedans : elles sont des secrets Cloudflare. |
 | `niveaux-captain.pine` | L'indicateur TradingView « Niveaux Captain » (Pine v5), copié par le bouton « Indicateur TradingView » du Desk. |
 | `agent-manuel.md` | Ancien manuel de l'agent, **plus utilisé** (l'agent actuel a sa méthode dans le relais). Ne pas le modifier. |
@@ -99,8 +102,8 @@ Le Desk évolue vers une plateforme multi-actifs pour un investisseur français 
 |---|---|---|
 | 0 | Outillage : Node, tests (`vmkit.mjs`, golden), workflow de tests, `serve.mjs`, corrections Studio et accueil, dépôt GitHub personnel | fait |
 | 1 | Socle de données : `models.js`, `datakit.js`, `fx.js`, `calendars.js`, `pea.js`, `providers.js`, `referentiel.json`, `allocation.json`, `fiscal.json` | fait |
-| 2 | Espace « Marchés » (touche 8) : bandeau, 6 onglets, fiche instrument, badges et correction PEA, état de la source, avertissement partout, Ctrl+K, `#marches/etf` | fait (à valider) |
-| 3 | Historiques publiés par le robot (branche `donnees`) | à faire |
+| 2 | Espace « Marchés » (touche 8) : bandeau, 6 onglets, fiche instrument, badges et correction PEA, état de la source, avertissement partout, Ctrl+K, `#marches/etf` | fait |
+| 3 | Historiques : `histo.mjs` + `donnees.yml` (branche `donnees`), `indicators.js`, copie IndexedDB, graphique et statistiques de la fiche, courbe d'un an dans le tableau, courbes de taux et €STR | fait (à valider) |
 | 4 | Espace « Portefeuille » (touche 9) | à faire |
 | 5 | Préférences d'investissement + allocation mensuelle | à faire |
 | 6 | Screener mensuel (mode à côté du screener crypto) | à faire |
@@ -119,6 +122,7 @@ Décisions qui s'appliquent à tout le chantier :
 
 **Recettes multi-actifs**
 - *Corriger le statut PEA d'un ETF* : dans `referentiel.json`, mettre `pea_eligibility_status` à `eligible` ou `not_eligible` **avec** `pea_source` (adresse de la fiche justETF, du DIC ou de l'émetteur) et `pea_last_checked_at` (date). Sans source, le statut est ignoré. Ne jamais marquer un fonds éligible sans source. Les actions gardent `unknown` : la règle (société UE/EEE) décide.
+- *Historiques* : la source de chaque instrument est son ticker Yahoo du référentiel, sauf les taux de `RATES` (`histo.mjs`). Un instrument refusé (ex. SBF 120 : série Yahoo arrêtée en 2015) apparaît avec son motif dans `marches-meta.json` (champ `err`) et la fiche affiche « pas encore publié ». Toute correction automatique est notée (`note`) et affichée dans la fiche. Relancer tout à la main : GitHub → Actions → « Données des marchés » → Run workflow.
 - *Changer le bandeau des Marchés* : liste `STRIP` dans `markets.js` (identifiants du référentiel, ex. `tv:EURONEXT:PX1`). Le gaz naturel s'affiche avec `marches: { gaz: true }` dans `config.js`.
 - *Changer l'onglet d'un instrument* : `tabOf` et `groupOf` dans `markets.js` (l'onglet dépend de la classe et du véhicule du référentiel).
 - *Nouvel espace chargé à la demande* : `CK.onView("id", function(ouvert){…})` (dans `layout.js`) appelle la fonction avec `true` à chaque entrée dans l'espace et `false` à la sortie.

@@ -139,11 +139,21 @@ function RobotHistAdapter(opts){
     return call(function(){return dk().fetch(url,{provider:"robotdata",parse:"json",ttl:H6,validate:validate,cacheKey:key,accept:[404]});})
       .then(function(r){if(r&&r.data===null&&!r.stale){missing[url]=1;log("info","robotdata","fichier absent du robot (mémorisé)",{url:url});return null;}return r?r.data:null;},function(e){if(!is404(e))throw e;missing[url]=1;log("info","robotdata","fichier absent du robot (mémorisé)",{url:url});return null;});
   }
+  /** marches-meta.json : relu au plus une fois par heure (une page ouverte longtemps voit les nouvelles versions). */
   function meta(b){
-    if(!metas[b])metas[b]=get(b+"/data/marches-meta.json",function(d){return d&&typeof d==="object"&&!Array.isArray(d)?true:"marches-meta.json invalide";})
+    var x=metas[b];if(x&&now()-x.ts<36e5)return x.p;
+    var p=get(b+"/data/marches-meta.json",function(d){return d&&typeof d==="object"&&!Array.isArray(d)?true:"marches-meta.json invalide";})
       .catch(function(e){delete metas[b];log("warn","robotdata","marches-meta.json illisible : "+why(e));return undefined;});
-    return metas[b];
+    metas[b]={p:p,ts:now()};return p;
   }
+  /* Copie longue des historiques dans IndexedDB (store "bars"), valable tant que la version du fichier ne change pas. */
+  function store(){var d=dk();return d&&d.idb&&typeof d.idb.get==="function"?d.idb:null;}
+  function fromStore(url,ver){var I=store();if(!I||ver==null)return Promise.resolve(null);
+    return Promise.resolve().then(function(){return I.get("bars",url);}).then(function(x){return x&&x.ver===String(ver)&&x.data&&validHist(x.data)===true?x.data:null;},function(){return null;});}
+  function toStore(url,ver,data){var I=store();if(!I||ver==null||!data)return;try{Promise.resolve(I.put("bars",url,{ver:String(ver),ts:now(),data:data})).then(null,function(){});}catch(e){}}
+  /** Fichier simple du robot (resume.json, taux.json) : null si absent. */
+  function file(name,check){var b=base();if(!b)return Promise.resolve(null);
+    return get(b+"/data/"+name,function(d){return d&&typeof d==="object"&&!Array.isArray(d)&&check(d)?true:name+" invalide";}).then(null,function(e){log("warn","robotdata",name+" illisible : "+why(e));return null;});}
   function validHist(d){return d&&Array.isArray(d.t)&&Array.isArray(d.c)&&d.t.length===d.c.length?true:"historique invalide (t et c)";}
   function toBars(d,instr,o){
     var ccy=(txt(d.ccy,4)||"").toUpperCase()||instr.currency||null,src=txt(d.src,40)||"robot",from=bound(o.from),to=bound(o.to,true),out=[];
@@ -156,6 +166,10 @@ function RobotHistAdapter(opts){
   }
   return {id:"robothist",label:"Robot (historiques)",fileOf:fileOf,
     url:function(instr){var b=base();return b?b+"/data/hist/"+fileOf(instr&&instr.id)+".json":null;},
+    /** Résumé publié par le robot (resume.json) : {v, ts, items:{id:{d, c, p, vol1y, mdd1y, spark…}}} ou null. */
+    resume:function(){return file("resume.json",function(d){return d.items&&typeof d.items==="object";});},
+    /** Taux publiés par le robot (taux.json) : {estr, depo, ea, us} ou null. */
+    taux:function(){return file("taux.json",function(){return true;});},
     /** Dividendes et divisions du dernier fichier lu pour cet instrument : {div, split} ou null. */
     events:function(instr){return events[instr&&instr.id||instr]||null;},
     /** Historique quotidien (Promise<PriceBar[]>), filtré par from/to ; [] si le robot ou le fichier manque. */
@@ -168,8 +182,10 @@ function RobotHistAdapter(opts){
         var files=m&&m.files,names=Array.isArray(files)?files:files&&typeof files==="object"?Object.keys(files):null;
         var listed=!names||names.some(function(x){return x===f||x===f+".json";});
         if(!listed){log("info","robotdata","pas d'historique publié pour cet instrument",{id:instr.id});return [];}
-        var ver=m&&(m.v||m.version||m.updated);
-        return get(url,validHist,ver!=null?"GET "+url+"#"+ver:undefined).then(function(d){return d?toBars(d,instr,o):[];});
+        // version propre au fichier (dernière séance + nombre de séances) : les autres fichiers restent en cache
+        var fm=files&&!Array.isArray(files)?files[f]||files[f+".json"]:null,ver=fm&&fm.last?fm.last+"."+(fm.n|0):m&&(m.v||m.version||m.updated);
+        return fromStore(url,ver).then(function(hit){if(hit)return toBars(hit,instr,o);
+          return get(url,validHist,ver!=null?"GET "+url+"#"+ver:undefined).then(function(d){if(d)toStore(url,ver,d);return d?toBars(d,instr,o):[];});});
       });}};
 }
 
@@ -323,6 +339,9 @@ function status(id){
 CK.mkt={
   register:register,providers:function(){return ORDER.map(function(k){return PROV[k];});},providerFor:providerFor,
   quotes:quotes,history:history,subscribe:subscribe,status:status,
+  /** Résumé des historiques (resume.json) et taux (taux.json) publiés par le robot ; ne rejettent jamais (null). */
+  resume:function(){try{return HIST.resume().then(null,function(){return null;});}catch(e){return Promise.resolve(null);}},
+  taux:function(){try{return HIST.taux().then(null,function(){return null;});}catch(e){return Promise.resolve(null);}},
   last:function(id){if(LAST[id])return LAST[id];var i=resolve(id,true);return i&&LAST[i.id]||null;},
   TvScanAdapter:TvScanAdapter,RobotHistAdapter:RobotHistAdapter,
   adapters:function(){return {tv:TV,hist:HIST};},

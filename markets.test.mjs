@@ -37,7 +37,7 @@ function tvRows(CK, syms) {
 function setup(handler) {
   const { CK, load } = makeContext();
   CK.cfg = () => ({ id: "test", data: "https://lafouge-stack.github.io/Desk", marches: { gaz: false } });
-  for (const f of ["models.js", "datakit.js", "fx.js", "calendars.js", "pea.js", "providers.js", "markets.js"]) load(f);
+  for (const f of ["models.js", "datakit.js", "fx.js", "calendars.js", "pea.js", "providers.js", "indicators.js", "markets.js"]) load(f);
   CK.models.setData("referentiel", REF);
   CK.NET = {};
   const clk = fakeClock(), flags = { hidden: false }, calls = [];
@@ -300,5 +300,74 @@ describe("intégration dans le Desk", () => {
     load("markets.js");
     assert.equal(n, 0); assert.equal(timers.length, 0);
     assert.equal(typeof CK.mk.boot, "function");
+  });
+});
+
+describe("historiques du robot (phase 3)", () => {
+  const RES = { v: 1, items: {
+    "isin:LU1681043599": { d: "2026-11-16", c: 706.39, p: { w: 0.0115, m1: -0.0045, y1: 0.1753, ytd: 0.16 }, spark: [600, 620, 610, 650, 706], note: "<img src=x onerror=alert(1)>" },
+    "tv:TVC:FR10Y": { d: "2026-10-31", c: 4.89, diff: true, freq: "M", p: { m1: 0.45, y1: 1.45 }, spark: [4.4, 4.5, 4.89] } } };
+  test("performances : TradingView d'abord, sinon l'historique ; taux en points de base depuis l'historique", () => {
+    const { CK, T } = setup();
+    T.setResume(RES);
+    const cw8 = bySym(CK, "CW8"), fr = CK.ref.get("tv:TVC:FR10Y");
+    assert.equal(T.perfVal(cw8, { perf: { y1: 18.1 } }, "y1"), 18.1, "TradingView en direct");
+    assert.ok(Math.abs(T.perfVal(cw8, null, "y1") - 17.53) < 1e-9, "repli sur l'historique");
+    assert.ok(Math.abs(T.perfVal(fr, { perf: { y1: 40 } }, "y1") - 145) < 1e-9, "taux : écart en pb, jamais un % du taux");
+    assert.match(T.rowHTML(fr, null), /\+45 pb/);
+    T.setResume({ items: "nimporte" }); assert.equal(T.perfVal(cw8, null, "y1"), null);
+  });
+  test("courbe d'un an : SVG simple (nombres seulement), couleur selon le sens, tiret sans données", () => {
+    const { T } = setup();
+    const up = T.sparkSVG([1, 2, 3]), down = T.sparkSVG([3, 2, "<script>", 1]);
+    assert.match(up, /class="mk-spark up"/); assert.match(down, /class="mk-spark down"/);
+    assert.ok(!/script/.test(down));
+    assert.equal((down.match(/,/g) || []).length, 3, "valeur non numérique ignorée");
+    assert.match(T.sparkSVG([5]), /—/); assert.match(T.sparkSVG(null), /—/);
+  });
+  test("le tableau affiche la courbe d'un an de chaque instrument publié", () => {
+    const { CK, T } = setup();
+    T.setResume(RES);
+    const h = T.tableHTML([bySym(CK, "CW8"), bySym(CK, "WPEA")], {}, null);
+    assert.match(h, />Courbe 1 an</); assert.equal((h.match(/mk-spark/g) || []).length, 1);
+    assert.match(h, /jusqu'au 16\/11\/2026/);
+  });
+  test("courbes de taux : 3 tracés (aujourd'hui, 1 mois, 1 an), libellés échappés, rien sans données", () => {
+    const { T } = setup();
+    const c = { label: "<b>Zone euro</b>", src: "BCE", mats: ["3M", "2Y", "10Y"], dates: ["2026-11-13", "2026-10-13", "2025-11-13"], vals: [[2.6, 3.0, 3.4], [2.7, 3.1, 3.3], [2.9, 3.0, 3.0]] };
+    const h = T.curvesHTML({ ea: c, estr: { d: "2026-11-16", v: 2.44 }, depo: { d: "2026-11-17", v: 2.5 } });
+    assert.equal((h.match(/<polyline/g) || []).length, 3);
+    assert.ok(!h.includes("<b>Zone")); assert.match(h, /&lt;b&gt;Zone euro/);
+    assert.match(h, /€STR \(BCE\)<\/em><b>2,440 %/); assert.match(h, /Taux de dépôt BCE<\/em><b>2,50 %/); assert.match(h, /13\/11\/2026/);
+    assert.equal(T.curvesHTML(null), ""); assert.equal(T.curveSVG({ mats: [], vals: [] }), "");
+  });
+  test("fiche : statistiques calculées par le Desk sur l'historique, source et note de nettoyage échappée", () => {
+    const { CK, T } = setup();
+    T.setResume(RES);
+    const cw8 = bySym(CK, "CW8"), D = 864e5, t0 = Date.parse("2016-01-04T16:30:00Z");
+    const bars = Array.from({ length: 2600 }, (_, k) => ({ timestamp: t0 + k * D, close: 100 * Math.pow(1.0003, k), source: "yahoo" }));
+    const h = T.histStatsHTML(cw8, bars);
+    assert.match(h, /Calculé par le Desk sur 2\s600 clôtures/); assert.match(h, /source : Yahoo Finance/);
+    assert.match(h, /\/an\)/, "3, 5 et 10 ans annualisés"); assert.match(h, /Volatilité sur 1 an/);
+    assert.match(h, /Données nettoyées/); assert.ok(!h.includes("<img")); assert.match(h, /&lt;img/);
+    assert.match(T.histStatsHTML(cw8, []), /pas encore publié/);
+    const fr = CK.ref.get("tv:TVC:FR10Y");
+    const hb = T.histStatsHTML(fr, bars.slice(0, 400).map((b, k) => ({ ...b, close: 3 + k / 1000, source: "bce" })));
+    assert.match(hb, / pb</); assert.ok(!/Volatilité/.test(hb)); assert.match(hb, /BCE \(moyenne mensuelle\)/);
+  });
+  test("start() lit le résumé et les taux du robot une seule fois (puis au plus toutes les 30 min)", async () => {
+    const s = setup((url, init, CK) => {
+      if (url.includes("scanner.tradingview.com")) return tvHandler(url, init, CK);
+      if (url.endsWith("/data/resume.json")) return resp(200, RES);
+      if (url.endsWith("/data/taux.json")) return resp(200, { estr: { d: "2026-11-16", v: 2.44 } });
+      return resp(404);
+    });
+    s.CK.mk.start(); await s.clk.tick(50);
+    const robot = s.calls.filter((c) => /resume|taux/.test(c.url));
+    assert.equal(robot.length, 2);
+    assert.ok(robot.every((c) => c.url.startsWith("https://lafouge-stack.github.io/Desk/data/")));
+    s.CK.mk.stop(); s.CK.mk.start(); await s.clk.tick(50);
+    assert.equal(s.calls.filter((c) => /resume|taux/.test(c.url)).length, 2, "pas de nouvelle lecture avant 30 min");
+    s.CK.mk.stop();
   });
 });
