@@ -17,6 +17,7 @@ var DEST=[
   {id:"news",name:"News",sub:"flux macro, agenda",c:"#A99BEA"},
   {id:"veille",name:"Agent",sub:"scalp, analyste, IA",c:"#B8F36B"},
   {id:"marches",name:"Marchés",sub:"indices, ETF, taux, change",c:"#62B6FF"},
+  {id:"portefeuille",name:"Portefeuille",sub:"cours des lignes, risques",c:"#FF9ECF"},
   {id:"fond",name:"Fond 3D",sub:"relief du BTC",c:"#8E949E"}
 ];
 var DN={};DEST.forEach(function(d){DN[d.id]=d;});
@@ -49,15 +50,15 @@ var SRC=[
   {id:"gemini",name:"Gemini (IA)",p:"REST",kind:"http",exp:900000,to:["veille"],ep:["generativelanguage.googleapis.com/v1beta/models/…:generateContent"],data:"Un des cerveaux possibles de l'agent de veille : reçoit l'état du marché et décide quoi dire. Clé personnelle, gardée dans le navigateur.",freq:"Toutes les 2 à 10 min, seulement avec une clé"},
   {id:"robot",name:"Robot GitHub",p:"JSON",kind:"http",exp:1800000,to:["journee","news"],ep:["…github.io/desk/data/calendar.json","…/data/news.json","…/data/fj.json"],data:"Agenda économique de la semaine et de la suivante (prévisions, chiffres précédents), news crypto de 6 sites traduites en français, copie de secours de FinancialJuice.",freq:"Mis à jour toutes les 10 min par GitHub"},
   {id:"ff",name:"Forex Factory (allorigins)",p:"REST",kind:"fb",exp:900000,to:["journee"],ep:["api.allorigins.win/raw?url=…ff_calendar_thisweek.json"],data:"Calendrier de la semaine, secours de l'agenda.",freq:"Après échec du relais"},
-  {id:"tvscan2",name:"TradingView (Marchés)",p:"REST",kind:"od",to:["marches"],ep:["scanner.tradingview.com/global/scan?label-product=desk-marches"],
+  {id:"tvscan2",name:"TradingView (Marchés)",p:"REST",kind:"od",to:["marches","portefeuille"],ep:["scanner.tradingview.com/global/scan?label-product=desk-marches"],
    data:"Cours des indices, actions, ETF, taux, matières premières et devises de l'espace Marchés (différé de 15 min pour Euronext). Appels séparés du crypto : mis en pause si le scanner du crypto est refusé (429).",
-   freq:"1 appel groupé par minute, seulement quand l'espace Marchés est ouvert (4 par minute au plus)"},
-  {id:"fx",name:"BCE (Frankfurter)",p:"REST",kind:"od",to:["marches"],ep:["api.frankfurter.dev/v1/latest?base=EUR","api.frankfurter.dev/v1/AAAA-MM-JJ..?base=EUR"],
+   freq:"1 appel groupé par minute, seulement quand l'espace Marchés ou Portefeuille est ouvert (4 par minute au plus)"},
+  {id:"fx",name:"BCE (Frankfurter)",p:"REST",kind:"od",to:["marches","portefeuille"],ep:["api.frankfurter.dev/v1/latest?base=EUR","api.frankfurter.dev/v1/AAAA-MM-JJ..?base=EUR"],
    data:"Taux de change de référence de la BCE : conversion des cours en euros.",freq:"À la première ouverture de l'espace Marchés"},
-  {id:"robotdata",name:"Robot (historiques)",p:"JSON",kind:"od",to:["marches"],ep:["…github.io/Desk/data/marches-meta.json","…/data/resume.json","…/data/taux.json","…/data/hist/…json"],
+  {id:"robotdata",name:"Robot (historiques)",p:"JSON",kind:"od",to:["marches","portefeuille"],ep:["…github.io/Desk/data/marches-meta.json","…/data/resume.json","…/data/taux.json","…/data/hist/…json"],
    data:"Historiques quotidiens sur 15 ans (Yahoo Finance, FRED, BCE), résumé des performances, courbes de taux et €STR, publiés par ton robot GitHub (branche donnees) : graphiques et statistiques des fiches.",freq:"Résumé et taux à l'ouverture des Marchés, historique à l'ouverture d'une fiche ; mis à jour plusieurs fois par jour par GitHub"},
-  {id:"binhist",name:"Binance (historique)",p:"REST",kind:"od",to:["marches"],ep:["data-api.binance.vision/api/v3/klines"],
-   data:"Historique quotidien des cryptos pour les calculs multi-actifs (à venir).",freq:"À la demande"},
+  {id:"binhist",name:"Binance (historique)",p:"REST",kind:"od",to:["marches","portefeuille"],ep:["data-api.binance.vision/api/v3/klines"],
+   data:"Historique quotidien des cryptos : graphiques des fiches et risques du portefeuille.",freq:"À la demande (fiche, onglet Risques)"},
   {id:"tr",name:"Traduction",p:"REST",kind:"od",to:["news"],ep:["translate.googleapis.com (gtx)","api.mymemory.translated.net (secours)"],data:"Titres de news traduits en français.",freq:"À chaque nouvelle news"}
 ];
 CK.NETSRC=SRC;

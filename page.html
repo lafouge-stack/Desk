@@ -90,6 +90,16 @@
     <div class="card"><div class="mk-main" id="mkMain"></div></div>
   </section>
 
+  <section class="mod" data-mod="pfresume">
+    <header class="mhd"><span class="mno"></span><h2>Mon portefeuille</h2><span class="meta" id="pfMeta"></span></header>
+    <div class="card"><div class="pf-resume" id="pfResume"></div></div>
+  </section>
+
+  <section class="mod" data-mod="pfmain">
+    <header class="mhd"><span class="mno"></span><h2>Positions, répartition et risques</h2><span class="meta">dans ce navigateur seulement</span></header>
+    <div class="card"><div class="pf-main" id="pfMain"></div></div>
+  </section>
+
   <section class="mod" data-mod="levels">
     <header class="mhd"><span class="mno"></span><h2>Niveaux clés</h2><span class="meta">OKX · jour, semaine, mois, sessions</span></header>
     <div class="card"><div class="lv" id="levels"></div></div>
@@ -232,6 +242,13 @@
   <div class="modal wide mk-fm" role="dialog" aria-modal="true" aria-labelledby="mkfTitle">
     <div class="mh"><h3 id="mkfTitle">Fiche</h3><button type="button" class="x" data-close aria-label="Fermer">×</button></div>
     <div class="mb mk-fb" id="mkfBody"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovPf" data-nofocus hidden>
+  <div class="modal wide pf-modal" role="dialog" aria-modal="true" aria-labelledby="pfmTitle">
+    <div class="mh"><h3 id="pfmTitle">Portefeuille</h3><button type="button" class="x" data-close aria-label="Fermer">×</button></div>
+    <div class="mb pf-mb" id="pfmBody"></div>
   </div>
 </div>
 

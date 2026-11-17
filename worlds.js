@@ -18,7 +18,8 @@ var W0=[
   {v:"news",name:"News",key:"5",col:"#A99BEA",desc:"Toutes les news en direct : tweets, Trump, macro, crypto, en français."},
   {v:"veille",name:"Agent",key:"6",col:"#B8F36B",desc:"Une lecture du marché toutes les 30 min : niveaux, scénarios et bilan."},
   {v:"net",name:"Connexions",key:"7",col:"#5FD3C6",desc:"L'état de chaque source de données, en direct."},
-  {v:"marches",name:"Marchés",key:"8",col:"#62B6FF",desc:"Indices, actions, ETF, taux, matières premières et devises, avec l'éligibilité PEA."}
+  {v:"marches",name:"Marchés",key:"8",col:"#62B6FF",desc:"Indices, actions, ETF, taux, matières premières et devises, avec l'éligibilité PEA."},
+  {v:"portefeuille",name:"Portefeuille",key:"9",col:"#FF9ECF",desc:"Tous tes comptes en euros : plus-value, répartition, risques. Reste dans ce navigateur."}
 ];
 /* Espaces décochés dans le Studio : retirés de l'accueil ; les raccourcis clavier suivent l'ordre restant */
 var W=W0.filter(function(w){var e=(CK.cfg&&CK.cfg().espaces)||{};return e[w.v]!==false;});W.forEach(function(w,i){w.key=String(i+1);});
@@ -45,7 +46,7 @@ function D(){
   var sess=CK.day&&CK.day.sessions?CK.day.sessions():[],ph=CK.day&&CK.day.paris?CK.day.paris():new Date().getHours();
   var up=(S.cal||[]).filter(function(e){return e.ts>now-600000;}).slice(0,6);
   return {now:now,F:F,fav:fav,def:def,neu:neu,rows:rows,setups:mt?+mt[1]:null,preset:pn,L:L,Sh:Sh,big:big,bigs:bigs,bk:bk,items:items,recent:recent,ev:S.nextEv,
-    sess:sess,ph:ph,cal:S.cal||[],up:up,mg:S.liqMagnets,mk:CK.mk&&CK.mk.home?CK.mk.home():{items:[]},
+    sess:sess,ph:ph,cal:S.cal||[],up:up,mg:S.liqMagnets,mk:CK.mk&&CK.mk.home?CK.mk.home():{items:[]},pf:CK.pf&&CK.pf.home?CK.pf.home():{has:false},
     hotLiq:!!(big&&big.usd>=1e6&&now-big.ts<300000),hotEv:!!(S.nextEv&&S.nextEv.ts>now&&S.nextEv.ts-now<9e5)};
 }
 /* Prochains rendez-vous de la journée : sessions + annonces, triés */
@@ -143,6 +144,17 @@ ART.marches=function(d,tips){
       (w>0?'<rect x="'+f1(up?200:200-w)+'" y="'+f1(y-5)+'" width="'+f1(Math.max(2,w))+'" height="10" rx="3" style="fill:var(--'+(up?"up":"down")+');opacity:.85"/>':"")+
       '<text class="lb sm '+(up?"al":"ar")+(x.c==null?"":up?" up":" down")+'" x="'+f1(up?206+w:194-w)+'" y="'+f1(y+4)+'">'+esc(x.txt)+'</text></g>';});
   return s;};
+/* Portefeuille : anneau de la répartition par famille (stockage du navigateur et cache des cours, aucun appel réseau) */
+ART.portefeuille=function(d,tips){
+  var p=d.pf||{has:false};
+  if(!p.has)return '<circle cx="200" cy="130" r="74" style="fill:none;stroke:var(--line-2);stroke-width:18;stroke-dasharray:6 8"/><text class="lb" x="200" y="126" style="text-anchor:middle">Aucun compte</text><text class="lb sm" x="200" y="146" style="text-anchor:middle">Entre pour créer ou importer</text>';
+  var G=(p.groups||[]).filter(function(g){return g.v>0;}),tot=G.reduce(function(s,g){return s+g.v;},0),R=78,C=2*Math.PI*R,off=0,s="",gap=G.length>1?2:0;
+  G.forEach(function(g){var len=g.v/tot*C,dl=Math.max(0.01,len-gap);
+    s+='<circle class="pf-seg pf-c-'+esc(g.k)+'" cx="120" cy="130" r="'+R+'" style="stroke-width:22" stroke-dasharray="'+f1(dl)+' '+f1(C-dl)+'" stroke-dashoffset="'+f1(-off)+'" transform="rotate(-90 120 130)"/>';off+=len;});
+  s+='<text class="lb" x="120" y="128" style="text-anchor:middle;font-size:17px">'+esc(p.hide?"••• €":u.nf(p.total,0)+" €")+'</text><text class="lb sm" x="120" y="148" style="text-anchor:middle">'+esc(p.n+" ligne"+(p.n>1?"s":""))+'</text>';
+  G.slice(0,7).forEach(function(g,k){var y=48+k*28,tt=tips?T(tipHead(g.label,"","var(--pfc)")+tipRow("Part",esc(u.nf(g.w*100,1)+" %"))+(p.hide?"":tipRow("Montant",esc(u.nf(g.v,0)+" €")))+'<span class="ta">Clic : ouvrir le Portefeuille</span>',"pf:repartition"):"";
+    s+='<g class="hv pf-c-'+esc(g.k)+'"'+tt+'>'+(tips?'<rect class="hit" x="226" y="'+(y-14)+'" width="168" height="26"/>':'')+'<rect class="pf-wsw" x="230" y="'+(y-7)+'" width="12" height="12" rx="3"/><text class="lb sm al" x="250" y="'+(y+4)+'">'+esc(g.label)+'</text><text class="lb sm ar" x="392" y="'+(y+4)+'">'+esc(u.nf(g.w*100,0)+" %")+'</text></g>';});
+  return s;};
 function art(i,d,tips){return '<svg class="w-art" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'+ART[W[i].v](d,tips)+'</svg>';}
 
 /* ---------- Chiffres clés + « À retenir » ---------- */
@@ -155,6 +167,8 @@ function stats(i,d){
     case "liq":var t=d.L+d.Sh;return [[t?u.usd(t):"—","liquidés en 1 h",d.hotLiq?"down":""],[t?Math.round(d.L/t*100)+" %":"—","de longs"],[d.big?u.usd(d.big.usd):"—",d.big?"plus grosse · "+d.big.base:"plus grosse"]];
     case "news":var f=d.items[0];return [[f&&f.ts?u.ago(f.ts):"—","dernière news"],[String(d.recent),"dans l'heure"],["FinancialJuice","source"]];
     case "veille":var vs=CK.veille?CK.veille.state():{msgs:[],att:[]},lm=vs.msgs[vs.msgs.length-1];return [[vs.active?(vs.busy?"Réfléchit":"Active"):"Inactive","agent IA",vs.active?"up":""],[String(vs.att.length),"lectures aujourd'hui"],[lm?u.parisTime(lm.ts):"—","dernière lecture"]];
+    case "portefeuille":var pf=d.pf||{};if(!pf.has)return [["—","valeur totale"],["—","plus-value latente"],["0","compte"]];
+      return [[pf.hide?"••• €":u.nf(pf.total,0)+" €","valeur totale"],[pf.hide?"•••":pf.pnl_pct!=null?(pf.pnl>=0?"+":"−")+u.nf(Math.abs(pf.pnl_pct*100),1)+" %":"—","plus-value latente",pf.pnl>0?"up":pf.pnl<0?"down":""],[String(pf.accounts),"compte"+(pf.accounts>1?"s":"")]];
     case "marches":var it=d.mk.items,ca=it[0]||{},sp=it[1]||{},eu=d.mk.euronext;
       return [[ca.txt||"—","CAC 40",ca.c>0?"up":ca.c<0?"down":""],[sp.txt||"—","S&P 500",sp.c>0?"up":sp.c<0?"down":""],[eu?eu.label:"—","Euronext",eu&&eu.open?"up":""]];
     case "net":var sm=CK.netSummary?CK.netSummary():{ok:0,warn:0,down:0};return [[sm.ok+"/"+(sm.list||[]).length,"sources actives","up"],[String(sm.warn),"à surveiller",sm.warn?"warn":""],[String(sm.down),"en panne",sm.down?"down":""]];
@@ -170,6 +184,8 @@ function insights(i,d){
     case "veille":var vs2=CK.veille?CK.veille.state():{msgs:[]};if(!vs2.active)return [["◷","Connexion à l'agent…",""]];return vs2.msgs.slice(-3).reverse().map(function(m){return [m.importance>=2?"!":"●","<b>"+esc(m.actif)+"</b> · "+esc(m.titre),m.importance>=2?"warn":""];}).concat(vs2.msgs.length?[]:[["◷","Première lecture du marché en préparation",""]]);
     case "net":var L2=(CK.netSummary?CK.netSummary().list:[]).filter(function(x){return x.st.k==="down"||x.st.k==="warn";}).slice(0,3);
       return L2.length?L2.map(function(x){return [x.st.k==="down"?"✕":"!","<b>"+esc(x.s.name)+"</b> · "+esc(x.st.l),x.st.k==="down"?"down":"warn"];}):[["✓","Toutes les sources répondent","up"]];
+    case "portefeuille":var pf2=d.pf||{};if(!pf2.has)return [["+","Crée un compte ou importe le fichier de ton courtier",""],["🔒","Ton portefeuille reste dans ce navigateur",""]];
+      return (pf2.alerts?[["!","<b>"+pf2.alerts+" alerte"+(pf2.alerts>1?"s":"")+"</b> sur tes enveloppes (PEA, plafonds)","down"]]:[]).concat(pf2.top.slice(0,pf2.alerts?2:3).map(function(x){return ["●","<b>"+esc(x.s)+"</b> · "+u.nf((x.w||0)*100,1)+" % du total"+(x.pnl_pct!=null?" · <span class=\""+(x.pnl_pct>=0?"up":"down")+"\">"+(x.pnl_pct>=0?"+":"−")+u.nf(Math.abs(x.pnl_pct*100),1)+" %</span>":""),""];}));
     case "marches":var mv=d.mk.items.filter(function(x){return x.c!=null;}).sort(function(a,b){return Math.abs(b.c)-Math.abs(a.c);}).slice(0,3);
       return mv.length?mv.map(function(x){return [x.c>=0?"▲":"▼","<b>"+esc(x.n)+"</b> · "+esc(x.px)+" · "+esc(x.txt),x.c>=0?"up":"down"];}):[["◷","Ouvre l'espace pour charger les cours",""]];
     case "news":return d.items.slice(0,3).map(function(x){return ["◆",'<b>'+(x.ts?u.ago(x.ts):"")+'</b> · '+esc((x.title||"").slice(0,80))+((x.title||"").length>80?"…":""),""];});
@@ -255,6 +271,7 @@ function act(a){
   else if(k==="link")window.open(v,"_blank","noopener");
   else if(k==="net"){var ni=idxOf("net");if(ni>=0)enter(ni);}
   else if(k==="mk"){var mi=idxOf("marches");if(mi<0)return;enter(mi);setTimeout(function(){if(CK.mk)CK.mk.fiche(v);},700);}
+  else if(k==="pf"){var pi=idxOf("portefeuille");if(pi<0)return;enter(pi);setTimeout(function(){if(CK.pf)CK.pf.open(v);},700);}
   else if(k==="sig"){var si=idxOf("macro");if(si<0)return;enter(si);setTimeout(function(){var el=document.querySelector('#sigList .sg[data-k="'+v+'"]');if(el)el.click();},700);}
 }
 
@@ -334,6 +351,8 @@ function paintBar(d){
   var html=stats(i,d).map(function(s){return '<span><b class="'+(s[2]||"")+'">'+esc(s[0])+'</b> '+esc(s[1])+'</span>';}).join("");
   var box=u.$("wbStats");if(box._h!==html){box.innerHTML=html;box._h=html;}
   [].forEach.call(bar.querySelectorAll(".wb-sw [data-view]"),function(b){b.setAttribute("aria-selected",b.getAttribute("data-view")===v?"true":"false");});
+  /* navigation trop longue (9 espaces) : l'espace ouvert reste visible */
+  var sw=bar.querySelector(".wb-sw"),on=sw&&sw.querySelector('[aria-selected="true"]');if(on&&sw.scrollWidth>sw.clientWidth+2)sw.scrollLeft=Math.max(0,on.offsetLeft-sw.offsetLeft-sw.clientWidth/2+on.offsetWidth/2);
   /* Hauteur réelle des barres collantes (le header ne colle pas sur mobile) */
   var topEl=document.querySelector(".top"),t=topEl&&getComputedStyle(topEl).position==="sticky"?topEl.offsetHeight:0;
   bar.style.top=t+"px";document.documentElement.style.setProperty("--stick",(t+bar.offsetHeight)+"px");

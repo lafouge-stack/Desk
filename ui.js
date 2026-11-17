@@ -150,7 +150,8 @@ function cmds(){return [
   
   {t:"Alertes",k:"prix",run:function(){$("btnAlerts").click();}},{t:"Calculateur de position",k:"risque",run:function(){$("btnCalc").click();}},
   {t:"Relancer le screener",k:"scan",run:function(){CK.runScan();}},
-].concat(CK.mk&&CK.layout&&CK.layout.catalog().some(function(v){return v.id==="marches";})&&(CK.cfg().espaces||{}).marches!==false?CK.mk.TABS.map(function(t){return {t:"Aller à Marchés · "+t.label,k:"marchés",run:function(){CK.mk.open(t.id);}};}):[]).concat([
+].concat(CK.mk&&CK.layout&&CK.layout.catalog().some(function(v){return v.id==="marches";})&&(CK.cfg().espaces||{}).marches!==false?CK.mk.TABS.map(function(t){return {t:"Aller à Marchés · "+t.label,k:"marchés",run:function(){CK.mk.open(t.id);}};}):[]).concat(CK.pf&&CK.layout&&CK.layout.catalog().some(function(v){return v.id==="portefeuille";})&&(CK.cfg().espaces||{}).portefeuille!==false?CK.pf.TABS.map(function(t){return {t:"Aller à Portefeuille · "+t.label,k:"portefeuille",run:function(){CK.pf.open(t.id);}};}).concat([
+  {t:"Ajouter une position",k:"portefeuille",run:function(){CK.pf.add();}},{t:"Importer un fichier de courtier (CSV)",k:"portefeuille",run:function(){CK.pf.importer();}}]):[]).concat([
   {t:(CK.cfg().beginner?"Désactiver":"Activer")+" le mode débutant",k:"aide",run:function(){var C=CK.merge(CK.cfg(),{beginner:!CK.cfg().beginner});CK.setCfg(C,true);CK.applyIdentity();}}
 ]);}
 function renderPal(){var q=$("palIn").value.trim(),ql=q.toLowerCase();palItems=cmds().filter(function(c){return !ql||(c.t+" "+c.k).toLowerCase().indexOf(ql)>=0;});
