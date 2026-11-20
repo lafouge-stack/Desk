@@ -44,12 +44,13 @@ Chaque phase s'est terminée par la construction, les tests, un contrôle dans C
 | 5 | `fc021a6` | Mes règles et allocation mensuelle : `prefs.js`, `allocation.js`, `selection.js`, `allocui.js` |
 | 6 | `fbec67e` | Screener mensuel : `mscreen.js`, `msui.js` |
 | 7 | `0e8bd28` | Backtest : `backtest.js`, `btui.js`, taux sans risque mensuel |
-| 8 | (ce commit) | Connexions crypto plus solides, proposition du mois sur l'accueil, cette documentation |
+| 8 | `c1adb98` | Connexions crypto plus solides, proposition du mois sur l'accueil, cette documentation |
+| 9 | (ce commit) | Allocation choisie par algorithme pour 4 profils, contrôles automatiques, profils côte à côte ; poche Actions = ETF + actions du CAC 40 |
 
 ## 3. Fichiers
 
 Tous les fichiers restent à la racine du dossier : l'envoi par le site GitHub ne garde pas les dossiers. La carte complète, fichier par fichier, est dans `CLAUDE.md`. Les fichiers ajoutés pour le multi-actifs sont :
-- **Navigateur** : `models.js`, `datakit.js`, `fx.js`, `calendars.js`, `pea.js`, `providers.js`, `indicators.js`, `markets.js`, `pfcore.js`, `portfolio.js`, `selection.js`, `allocation.js`, `prefs.js`, `allocui.js`, `mscreen.js`, `msui.js`, `backtest.js`, `btui.js`.
+- **Navigateur** : `models.js`, `datakit.js`, `fx.js`, `calendars.js`, `pea.js`, `providers.js`, `indicators.js`, `markets.js`, `pfcore.js`, `portfolio.js`, `selection.js`, `optimizer.js`, `allocation.js`, `prefs.js`, `allocui.js`, `mscreen.js`, `msui.js`, `backtest.js`, `btui.js`.
 - **Données modifiables** : `referentiel.json` (les instruments), `allocation.json` (poches, profils, pondérations, seuils, coûts, séries de référence) et `fiscal.json` (règles fiscales datées et sourcées). Elles sont injectées dans la page par `build.mjs`.
 - **Robot** : `histo.mjs`, `.github/workflows/donnees.yml`.
 - **Tests** : `*.test.mjs` (voir §11).
@@ -105,15 +106,18 @@ API commune `CK.mkt` :
 
 ```
  1. Univers        classes ET types cochés, au moins un instrument proposable, poches non écartées
- 2. Stratégique    poids du profil (ou personnalisés) × horizon, restreints à l'univers, remis à 100 %
- 3. Inclinaison    w × (1 + t), t = inclinaison_max × (score − 50) / 50 ; score de rotation en série temporelle (5 ans)
+ 2. Algorithme     répartition qui maximise le rendement attendu sans dépasser la volatilité visée du profil (× horizon),
+                   dans ses bornes ; rendement attendu = rf + 0,3 × σ × (1 + inclinaison selon le score de rotation, 5 ans)
+                   (poids personnalisés : utilisés tels quels ; profil refusé par les contrôles : modèle de référence)
+ 3. (inclinaison)  déjà comprise dans l'étape 2
  4. Régime         risk-off ou haute volatilité : 30 % du risque vers liquidités / obligations / or, s'ils sont cochés
  5. Volatilité     mélange avec le refuge (liquidités, sinon obligations) jusqu'à la cible du profil (covariance Ledoit-Wolf, 156 semaines)
  6. Contraintes    plafonds par classe, plafond crypto, plancher de liquidités, lignes bloquées (assurance-vie…)
  7-9. Mouvements   bande d'inaction ; rotation maximale (ventes d'actifs seulement : dépenser ses espèces n'est pas une vente)
 10. Placement      par compte, sans transfert entre enveloppes (ajustement proportionnel itératif à partir de tes positions),
                    PEA toujours strict, plafond de versements, versement du mois là où il sert
-11. Instruments    1 à 3 par poche, lignes détenues gardées, sans doublon d'exposition, plafond par instrument
+11. Instruments    1 à 3 par poche, lignes détenues gardées, sans doublon d'exposition, plafond par instrument ;
+                   poche Actions partagée entre ETF et actions du CAC 40 retenues par le screener (part et nombre selon le profil)
 12. Explications   action par classe (Renforcer, Réduire, Basculer, Passer en liquidités, Conserver, Ne rien faire),
                    raisons, risques, confiance, coûts, impôt indicatif, alternatives PEA
 ```
@@ -144,7 +148,20 @@ Les invariants sont vérifiés sur 500 combinaisons de cases (`allocation.test.m
 - une liquidité insuffisante ;
 - aucun compte capable de le recevoir.
 
-Le score de sélection est expliqué : ligne déjà détenue, devise, statut PEA, frais, spread, profondeur d'historique. Les titres en direct ne sont proposés que s'ils sont déjà détenus (voir §13).
+Le score de sélection est expliqué : ligne déjà détenue, devise, statut PEA, frais, spread, profondeur d'historique.
+
+**Actions en direct** : uniquement les valeurs du CAC 40 (`selection.univers_actions_directes`, 39 actions ; la foncière URW reste dans l'immobilier coté). Une valeur entre si son score au screener mensuel atteint 60, avec une tendance d'au moins 50 et une étiquette autre que Réduire. Une valeur déjà détenue reste tant que son score atteint 45. Au plus 5, 8, 10 ou 12 titres selon le profil, à poids égaux. Leur part dans la poche Actions vaut au plus 15, 25, 40 ou 50 % (réduite s'il y a moins de titres retenus). Le reste de la poche va aux ETF.
+
+### Contrôles automatiques des 4 profils
+
+Avant d'être affiché, chaque profil est rejoué mois par mois sur le passé avec les seules données connues à chaque date (backtest hors échantillon). Il est **refusé** si l'un de ces contrôles échoue, et remplacé alors par son modèle de référence :
+- volatilité réalisée au plus 1,35 × la volatilité visée ;
+- perte maximale au plus 15, 25, 35 ou 50 % selon le profil, y compris pendant le krach du Covid (2020) et la hausse des taux (2022) ;
+- Sharpe au plus 0,25 sous celui du modèle de référence ;
+- répartition de l'algorithme dans les bornes du profil à chaque décision ;
+- profils rangés du moins au plus risqué (volatilité et perte maximale).
+
+Le résultat est gardé pour le mois dans le navigateur et refait si tes règles ou les données changent. Les 4 profils sont affichés côte à côte dans l'onglet Allocation, avec leurs contrôles ; « Choisir » change ton profil.
 
 ## 8. Screener mensuel (`mscreen.js`)
 
@@ -242,12 +259,13 @@ Commande : `node --test "*.test.mjs"`. Aucune installation n'est nécessaire. Le
 | `markets` | 30 | espace Marchés |
 | `pfcore`, `portfolio` | 20, 14 | opérations rejouées, valorisation, contrôles d'enveloppe, import CSV, risques, montants masqués |
 | `allocation`, `allocui` | 22, 11 | 500 combinaisons de cases, point-in-time, enveloppes, Mes règles, journal |
+| `profiles` | 13 | optimiseur (bornes, cible de volatilité, déterminisme), 4 profils rangés, actions du CAC 40 seulement, contrôles et repli, tableau des profils |
 | `mscreen` | 14 | dividendes réinvestis, CHOP inchangé, pondérations lues dans la configuration, table d'étiquettes |
 | `backtest` | 15 | taux sans risque, mesures, exécution le jour ouvré suivant, frais, fiscalité, aucun regard vers l'avenir |
 | `sockets` | 5 | connexions crypto : nouvel essai, retour du réseau, jamais deux connexions, aucun chien de garde |
 | `build` | 3 | construction et présence de tous les fichiers |
 
-Total : **521 tests** à la fin de la phase 8.
+Total : **534 tests** à la fin de la phase 9.
 
 ## 12. Connexions crypto (phase 8)
 
@@ -282,7 +300,8 @@ Total : **521 tests** à la fin de la phase 8.
   - Pas de barème progressif.
   - Crypto : régime de l'article 150 VH bis non modélisé finement.
   - Assurance-vie : saisie manuelle, jamais proposée.
-- **Titres en direct** : l'allocation garde ceux que tu détiens mais n'en choisit jamais de nouveaux. Le screener les classe, mais ne les sélectionne pas pour toi.
+- **Actions en direct** : limitées au CAC 40 et choisies par le score du screener. Le backtest et les contrôles mesurent la poche Actions sur l'ETF monde ; la sélection de titres elle-même n'est pas simulée sur le passé.
+- **L'algorithme ne cherche pas à battre le marché** : même prime de risque supposée pour toutes les classes, il diversifie et suit la tendance. Sur 2012-2026, il a eu un peu moins de risque que le modèle de référence, pour un rendement un peu plus faible.
 - **Argent, gaz naturel, immobilier coté** : pas de série historique fiable, donc le poids du profil s'applique sans inclinaison, avec une confiance faible.
 - **Screener** : pas de mode « rapide » sur des milliers d'instruments, ni d'univers de 580 actions de Paris. Il classe le référentiel (environ 70 instruments).
 - **Pas de proxys temps réel** pour les marchés traditionnels : cotations du scanner, avec le délai indiqué par la source.

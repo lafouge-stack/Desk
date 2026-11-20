@@ -30,7 +30,7 @@ function walk(seed, drift, vol, py = 252, from = "2015-01-05") {
 }
 function market(seed = 1) {
   const eq = walk(seed, 0.08, 0.16);
-  return { series: { actions_etf: eq, actions_titres: eq, obligations: walk(seed + 1, 0.02, 0.05), or: walk(seed + 2, 0.05, 0.14), petrole: walk(seed + 3, 0, 0.3),
+  return { series: { actions: eq, obligations: walk(seed + 1, 0.02, 0.05), or: walk(seed + 2, 0.05, 0.14), petrole: walk(seed + 3, 0, 0.3),
       matieres_premieres: walk(seed + 4, 0.02, 0.15), agricole: walk(seed + 5, 0, 0.18), crypto: walk(seed + 6, 0.3, 0.7, 365) },
     ref: eq, vix: { t: eq.t, c: eq.c.map(() => 18) } };
 }
@@ -97,12 +97,12 @@ describe("garde-fous du moteur", () => {
     }
     assert.ok(checked > 200, "assez de cas calculés (" + checked + ")");
   });
-  test("« Actions + ETF + Crypto » seulement : tout le poids est réparti entre ETF actions et crypto", () => {
+  test("« Actions + ETF + Crypto » seulement : tout le poids est réparti entre la poche Actions et la crypto", () => {
     const { A, M } = setup(); const m = market();
     const R = A.run(Object.assign({ prefs: prefs(M, { classes: ["actions", "crypto"], vehicles: ["etf", "spot_crypto"], extra: { limits: { max_crypto: 15 } } }), now: NOW, current: {} }, m));
     assert.equal(R.ok, true);
-    assert.deepEqual([...R.universe].sort(), ["actions_etf", "crypto"]);
-    assert.ok(Math.abs(R.steps.final.actions_etf + R.steps.final.crypto - 1) < 1e-9);
+    assert.deepEqual([...R.universe].sort(), ["actions", "crypto"]);
+    assert.ok(Math.abs(R.steps.final.actions + R.steps.final.crypto - 1) < 1e-9);
     assert.ok(R.steps.final.crypto <= 0.15 + 1e-9);
     assert.ok(R.excluded.some((x) => x.id === "obligations" && /non cochée/.test(x.why)));
   });
@@ -111,10 +111,10 @@ describe("garde-fous du moteur", () => {
     const R = A.run(Object.assign({ prefs: prefs(M, { extra: { limits: { min_liquidites: 30 } } }), now: NOW, current: {} }, m));
     assert.ok(R.steps.final.liquidites >= 0.3 - 1e-9);
   });
-  test("cible de volatilité : glissement vers les liquidités par dichotomie ; inatteignable sans refuge → drapeau", () => {
+  test("cible de volatilité : l'algorithme la respecte avec des liquidités ; inatteignable sans refuge → drapeau", () => {
     const { A, M } = setup(); const m = market();
     const R = A.run(Object.assign({ prefs: prefs(M, { classes: ["actions", "liquidites"], vehicles: ["etf", "cash"], extra: { risk_profile: "prudent" } }), now: NOW, current: {} }, m));
-    assert.ok(R.totals.alpha > 0, "une part glisse vers les liquidités");
+    assert.ok(R.steps.final.liquidites > 0.5, "le reste en liquidités (" + R.steps.final.liquidites + ")");
     assert.ok(R.totals.sigma_engine <= 0.05 + 1e-6, "volatilité ≤ 5 % (" + R.totals.sigma_engine + ")");
     const R2 = A.run(Object.assign({ prefs: prefs(M, { classes: ["actions"], vehicles: ["etf"], extra: { risk_profile: "prudent" } }), now: NOW, current: {} }, m));
     assert.ok(R2.flags.some((f) => f.code === "vol" && /inatteignable/.test(f.msg)));
@@ -179,11 +179,11 @@ describe("portefeuille réel : bande, rotation, enveloppes", () => {
   test("bande d'inaction : un portefeuille déjà à sa cible ne bouge pas (CONSERVER, aucun ordre)", () => {
     const { A, M, CK } = setup(); const m = market();
     const p = prefs(M, { classes: ["actions", "liquidites"], vehicles: ["etf", "cash"], extra: { risk_profile: "agressif", limits: { bande_inaction_pp: 5, max_par_instrument: 100 } } });
-    const R0 = A.run(Object.assign({ prefs: p, now: NOW, current: {} }, m)), wa = R0.steps.final.actions_etf;
+    const R0 = A.run(Object.assign({ prefs: p, now: NOW, current: {} }, m)), wa = R0.steps.final.actions;
     const V0 = 10000, cash = Math.round(V0 * (1 - wa));
     const { P, V } = pf(CK, { accounts: [Object.assign({}, ACC[0], { cash_balance: cash })], holdings: [{ account_id: "pea", instrument_id: "isin:LU1681043599", quantity: (V0 - cash) / 100 }] });
     const R = A.run(Object.assign({ prefs: p, now: NOW, current: A.current(P, V, 0) }, m));
-    assert.equal(R.decisions.find((d) => d.poche === "actions_etf").action, "CONSERVER");
+    assert.equal(R.decisions.find((d) => d.poche === "actions").action, "CONSERVER");
     assert.equal(R.orders.filter((o) => !o.skipped).length, 0);
   });
   test("rotation maximale : les ventes libres sont réduites à la limite ; une classe décochée est vendue (ventes obligatoires)", () => {
@@ -223,13 +223,13 @@ describe("sélection des instruments", () => {
     assert.ok(R.excluded.some((x) => x.id === "crypto"));
     for (const d of R.decisions) for (const l of d.instruments_proposes) assert.ok(l.pea && l.pea.ok, l.id);
   });
-  test("titres en direct : aucun nouveau titre choisi sans screener ; un titre détenu est gardé", () => {
+  test("titres en direct : sans notes du screener, seuls les titres détenus sont gardés (aucun nouveau)", () => {
     const { S, M, CK } = setup(); const p = prefs(M);
-    const c0 = S.candidates("actions_titres", ctx(CK, p));
-    assert.equal(S.viable("actions_titres", c0).ok, false);
+    const prof = ALLOC.profils.modere;
+    assert.deepEqual([...S.stocksPlan(S.candidates("actions_titres", ctx(CK, p)), ctx(CK, p), prof).ids], []);
     const c1 = S.candidates("actions_titres", ctx(CK, p, { held: { "isin:FR0000120271": 5000 } }));
-    assert.equal(S.viable("actions_titres", c1).ok, true);
-    const pk = S.pick("actions_titres", c1, 8000, 100000, ctx(CK, p));
+    assert.deepEqual([...S.stocksPlan(c1, ctx(CK, p), prof).ids], ["isin:FR0000120271"]);
+    const pk = S.pick("actions_titres", c1, 8000, 100000, Object.assign(ctx(CK, p), { stockIds: ["isin:FR0000120271"] }));
     assert.deepEqual([...pk.lines.map((l) => l.id)], ["isin:FR0000120271"]);
   });
   test("une ligne détenue et autorisée est gardée (pas de bascule inutile) ; pas deux ETF de même exposition", () => {

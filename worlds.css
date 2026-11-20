@@ -1803,3 +1803,18 @@ body[data-scrmode="mensuel"] .mod[data-mod="screener"],body:not([data-scrmode="m
 /* graphique du backtest sur écran étroit : textes lisibles (unités du dessin), étiquettes de fin remplacées par la légende */
 @container (max-width:620px){.bt-ax{font-size:22px}.bt-end{display:none}.bt-chart .al-leg{flex-wrap:wrap;gap:6px 12px}.bt-chart .al-leg em{margin-left:0;flex:1 1 100%}}
 .al-card .bt-table{min-width:520px}
+
+/* ================================================================
+   Phase 9 — Les 4 profils calculés par l'algorithme (al-profiles)
+   ================================================================ */
+.flow .al-ptable td,.al-ptable td,.flow .al-ptable th,.al-ptable th{padding:7px 10px;font-size:13px;white-space:nowrap;display:table-cell}
+.al-ptable .al-me{background:color-mix(in oklab,var(--wc,var(--accent)) 10%,transparent)}
+.al-ptable th em{font-style:normal;color:var(--muted);font-weight:500}
+.al-ptable tr.al-sub td{color:var(--muted);font-size:12px}.al-ptable tr.al-sub td:first-child{padding-left:22px}
+.al-ptable tr.al-pm td{border-top:1px solid var(--line-2)}
+.al-ok{color:var(--up);font-weight:600}.al-ko{color:var(--down);font-weight:600;cursor:help;white-space:normal}
+.al-cur{font:600 11.5px var(--font);color:var(--wc,var(--accent))}
+.al-pdet{margin-top:10px}.al-pdet summary{cursor:pointer;font:600 12.5px var(--font);color:var(--text)}
+.al-pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:10px 18px;margin-top:8px}
+.al-pgrid ul{margin:0;padding-left:16px;font:500 12px/1.5 var(--font);color:var(--text);list-style:none}.al-pgrid li.ko{color:var(--down)}
+.al-profiles .tbl-wrap{overflow-x:auto}.al-profiles .al-ptable{min-width:520px}

@@ -45,15 +45,15 @@ function vehiclesHTML(p){return '<div class="pr-chips">'+(M().VEHICLES||[]).filt
   return '<label class="pr-chip">'+chk("veh",v.id,p.vehicles[v.id]===true)+'<span><b>'+esc(v.label)+'</b><em>'+esc(VEH_HELP[v.id]||"")+'</em></span></label>';}).join("")+'</div>';}
 function profileHTML(p){
   var P=cfg().profils||{},ps=cfg().poches||[];
-  var cards=Object.keys(P).map(function(k){var x=P[k],w=x.poids||{},top=ps.filter(function(q){return w[q.id]>0;}).sort(function(a,b){return w[b.id]-w[a.id];}).slice(0,4);
+  var cards=Object.keys(P).map(function(k){var x=P[k],w=x.bornes||{},top=ps.filter(function(q){return w[q.id]&&w[q.id][1]>0;}).sort(function(a,b){return w[b.id][1]-w[a.id][1];}).slice(0,3);
     return '<label class="pr-prof">'+'<input type="radio" name="prof" value="'+esc(k)+'"'+(p.risk_profile===k?" checked":"")+'><span><b>'+esc(x.label||k)+'</b>'+
-      '<em>volatilité cible '+esc(x.vol_cible)+' % · risque max '+esc(x.risque_max_sri)+'/7</em><i>'+top.map(function(q){return esc(q.label)+" "+esc(w[q.id])+" %";}).join(" · ")+'</i></span></label>';}).join("");
+      '<em>volatilité visée '+esc(x.vol_cible)+' % · perte tolérée '+esc(x.validation&&x.validation.perte_max)+' % · risque max '+esc(x.risque_max_sri)+'/7</em><i>'+top.map(function(q){return esc(q.label.replace(/ \(.*\)$/,""))+" "+esc(w[q.id][0])+"-"+esc(w[q.id][1])+" %";}).join(" · ")+'</i></span></label>';}).join("");
   var H=cfg().horizons||{},hz='<select name="hor">'+Object.keys(H).filter(function(k){return k!=="_doc";}).map(function(k){return '<option value="'+esc(k)+'"'+(p.horizon===k?" selected":"")+'>'+esc(H[k].label||k)+'</option>';}).join("")+'</select>';
-  var base=(P[p.risk_profile]||{}).poids||{},pp=p.poids_perso,perso=!!pp;
+  var base=(P[p.risk_profile]||{}).poids_reference||{},pp=p.poids_perso,perso=!!pp;
   var grid='<div class="pr-wgrid">'+ps.map(function(q){var v=perso&&pp[q.id]!=null?pp[q.id]:base[q.id]||0;return '<label><span>'+esc(q.label)+'</span>'+num("w_"+q.id,nfr(v),'class="pr-w" data-def="'+esc(base[q.id]||0)+'"')+'<em>%</em></label>';}).join("")+
     '<p class="pr-wsum" data-pr="wsum"></p></div>';
   return '<div class="pr-profs">'+cards+'</div><div class="pr-row"><label class="pr-f"><span>Horizon d\'investissement</span>'+hz+'</label></div>'+
-    '<label class="pr-inl">'+chk("perso","1",perso)+' Poids personnalisés (au lieu de ceux du profil)</label><div class="pr-perso"'+(perso?"":" hidden")+'>'+grid+'</div>';
+    '<label class="pr-inl">'+chk("perso","1",perso)+' Poids personnalisés (au lieu de l\'algorithme ; préremplis avec le modèle de référence du profil)</label><div class="pr-perso"'+(perso?"":" hidden")+'>'+grid+'</div>';
 }
 function peaHTML(p){return '<div class="pr-radios">'+PEA_MODES.map(function(m){return '<label class="pr-rad"><input type="radio" name="pea" value="'+m.id+'"'+(p.pea_mode===m.id?" checked":"")+'><span><b>'+esc(m.label)+'</b><em>'+esc(m.d)+'</em></span></label>';}).join("")+'</div>';}
 function contribHTML(p,accounts){
@@ -88,7 +88,7 @@ function formHTML(p,o){
     (p.saved?'':'<p class="pr-intro">Rien n\'est calculé tant que tu n\'as pas enregistré tes propres règles. Coche les classes d\'actifs et les types de produits dans lesquels tu acceptes d\'investir : le moteur ne proposera jamais rien d\'autre.</p>')+
     sec("1. Classes d'actifs autorisées",classesHTML(p)+pochesHTML(p),"Une sous-classe n'est autorisée que si sa classe parente est cochée.")+
     sec("2. Types de produits",vehiclesHTML(p),"Un instrument n'est proposé que si sa classe ET son type sont cochés.")+
-    sec("3. Profil et horizon",profileHTML(p),"Les profils sont des modèles publics d'exemple, identiques pour tous et modifiables (fichier allocation.json) : ce n'est pas un conseil personnalisé.")+
+    sec("3. Profil et horizon",profileHTML(p),"L'allocation de chaque profil est calculée par l'algorithme (volatilité visée, bornes par classe, tendance), puis contrôlée sur le passé. Bornes, seuils et modèles de référence sont publics, identiques pour tous et modifiables (allocation.json) : ce n'est pas un conseil personnalisé.")+
     sec("4. PEA",peaHTML(p))+
     sec("5. Versement du mois",contribHTML(p,o.accounts))+
     sec("6. Limites",limitsHTML(p))+
@@ -158,7 +158,7 @@ function open(){
       // cocher une classe coche ses sous-classes (sauf les stablecoins) ; la décocher les décoche
       if(e.target.name==="cls"&&/^[a-z_]+$/.test(e.target.value)){var on=e.target.checked,stack=[e.target.value];
         while(stack.length){var id=stack.pop();[].forEach.call(f2.querySelectorAll('input[name="cls"][data-parent="'+id+'"]'),function(c){if(!on||c.value!=="stablecoin")c.checked=on;stack.push(c.value);});}}
-      if(e.target.name==="prof"){var P=cfg().profils||{},w=(P[e.target.value]||{}).poids||{},per=f2.querySelector('input[name="perso"]');
+      if(e.target.name==="prof"){var P=cfg().profils||{},w=(P[e.target.value]||{}).poids_reference||{},per=f2.querySelector('input[name="perso"]');
         if(per&&!per.checked)[].forEach.call(f2.querySelectorAll(".pr-w"),function(i){var k=i.name.slice(2);i.value=nfr(w[k]||0);});}
       sync(f2);});
     b.addEventListener("input",function(e){var f2=e.target&&e.target.closest?e.target.closest("form"):null;if(f2&&/^w_/.test(e.target.name||""))sync(f2);});

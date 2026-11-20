@@ -1,9 +1,8 @@
 {
-  "_doc": "Réglages de l'allocation mensuelle et du screener mensuel. Modifiable depuis le site GitHub (garder guillemets et virgules), puis node build.mjs. Les poids sont en % ; chaque profil doit totaliser 100. Ce sont des MODÈLES PUBLICS d'exemple, identiques pour tous, visibles et modifiables : ce n'est pas un conseil personnalisé.",
+  "_doc": "Réglages de l'allocation mensuelle, du screener mensuel et du backtest. Modifiable depuis le site GitHub (garder guillemets et virgules), puis node build.mjs. Les pourcentages sont en %. L'allocation de chaque profil est CALCULÉE par l'algorithme (optimiseur) dans les bornes ci-dessous, puis contrôlée (validation) ; poids_reference = modèle fixe d'exemple, utilisé pour la comparaison et comme repli si les contrôles échouent. Modèles publics, identiques pour tous : ce n'est pas un conseil personnalisé.",
   "version": 1,
   "poches": [
-    { "id": "actions_titres", "label": "Actions (titres en direct)", "classe": "actions", "vehicules": ["titre"] },
-    { "id": "actions_etf", "label": "ETF actions", "classe": "actions", "vehicules": ["etf", "fonds"] },
+    { "id": "actions", "label": "Actions (ETF et actions françaises)", "classe": "actions", "vehicules": ["etf", "fonds", "titre"] },
     { "id": "obligations", "label": "Obligations", "classe": "obligations", "vehicules": ["etf", "fonds"] },
     { "id": "or", "label": "Or", "classe": "or", "vehicules": ["etc_etn", "etf"] },
     { "id": "argent", "label": "Argent", "classe": "argent", "vehicules": ["etc_etn", "etf"] },
@@ -18,34 +17,90 @@
   "profils": {
     "prudent": {
       "label": "Prudent",
-      "poids": { "actions_etf": 22, "actions_titres": 3, "obligations": 40, "or": 7, "argent": 0, "petrole": 0, "gaz": 0, "matieres_premieres": 3, "agricole": 0, "immobilier_cote": 0, "crypto": 0, "liquidites": 25 },
       "vol_cible": 5,
+      "bornes": {
+        "actions": [5, 35],
+        "obligations": [15, 60],
+        "or": [0, 10],
+        "argent": [0, 2],
+        "petrole": [0, 2],
+        "gaz": [0, 0],
+        "matieres_premieres": [0, 5],
+        "agricole": [0, 2],
+        "immobilier_cote": [0, 5],
+        "crypto": [0, 0],
+        "liquidites": [10, 60]
+      },
+      "titres_vifs": { "part_max": 15, "nombre": 5 },
+      "validation": { "perte_max": 15 },
+      "poids_reference": { "actions": 25, "obligations": 40, "or": 7, "argent": 0, "petrole": 0, "gaz": 0, "matieres_premieres": 3, "agricole": 0, "immobilier_cote": 0, "crypto": 0, "liquidites": 25 },
       "inclinaison_max": 0.15,
-      "max_titres_vifs": 5,
       "risque_max_sri": 4
     },
     "modere": {
       "label": "Modéré",
-      "poids": { "actions_etf": 40, "actions_titres": 8, "obligations": 25, "or": 7, "argent": 1, "petrole": 1, "gaz": 0, "matieres_premieres": 3, "agricole": 0, "immobilier_cote": 0, "crypto": 3, "liquidites": 12 },
       "vol_cible": 8,
+      "bornes": {
+        "actions": [20, 60],
+        "obligations": [10, 45],
+        "or": [0, 12],
+        "argent": [0, 3],
+        "petrole": [0, 3],
+        "gaz": [0, 1],
+        "matieres_premieres": [0, 6],
+        "agricole": [0, 3],
+        "immobilier_cote": [0, 5],
+        "crypto": [0, 4],
+        "liquidites": [5, 40]
+      },
+      "titres_vifs": { "part_max": 25, "nombre": 8 },
+      "validation": { "perte_max": 25 },
+      "poids_reference": { "actions": 48, "obligations": 25, "or": 7, "argent": 1, "petrole": 1, "gaz": 0, "matieres_premieres": 3, "agricole": 0, "immobilier_cote": 0, "crypto": 3, "liquidites": 12 },
       "inclinaison_max": 0.25,
-      "max_titres_vifs": 15,
       "risque_max_sri": 5
     },
     "dynamique": {
       "label": "Dynamique",
-      "poids": { "actions_etf": 52, "actions_titres": 15, "obligations": 10, "or": 6, "argent": 2, "petrole": 2, "gaz": 0, "matieres_premieres": 2, "agricole": 0, "immobilier_cote": 0, "crypto": 7, "liquidites": 4 },
       "vol_cible": 12,
+      "bornes": {
+        "actions": [40, 80],
+        "obligations": [0, 30],
+        "or": [0, 12],
+        "argent": [0, 4],
+        "petrole": [0, 4],
+        "gaz": [0, 2],
+        "matieres_premieres": [0, 6],
+        "agricole": [0, 3],
+        "immobilier_cote": [0, 8],
+        "crypto": [0, 8],
+        "liquidites": [2, 25]
+      },
+      "titres_vifs": { "part_max": 40, "nombre": 10 },
+      "validation": { "perte_max": 35 },
+      "poids_reference": { "actions": 67, "obligations": 10, "or": 6, "argent": 2, "petrole": 2, "gaz": 0, "matieres_premieres": 2, "agricole": 0, "immobilier_cote": 0, "crypto": 7, "liquidites": 4 },
       "inclinaison_max": 0.35,
-      "max_titres_vifs": 25,
       "risque_max_sri": 6
     },
     "agressif": {
       "label": "Agressif",
-      "poids": { "actions_etf": 50, "actions_titres": 22, "obligations": 0, "or": 5, "argent": 2, "petrole": 3, "gaz": 0, "matieres_premieres": 1, "agricole": 0, "immobilier_cote": 0, "crypto": 15, "liquidites": 2 },
       "vol_cible": 18,
+      "bornes": {
+        "actions": [55, 95],
+        "obligations": [0, 15],
+        "or": [0, 10],
+        "argent": [0, 5],
+        "petrole": [0, 5],
+        "gaz": [0, 3],
+        "matieres_premieres": [0, 6],
+        "agricole": [0, 3],
+        "immobilier_cote": [0, 10],
+        "crypto": [0, 15],
+        "liquidites": [0, 15]
+      },
+      "titres_vifs": { "part_max": 50, "nombre": 12 },
+      "validation": { "perte_max": 50 },
+      "poids_reference": { "actions": 72, "obligations": 0, "or": 5, "argent": 2, "petrole": 3, "gaz": 0, "matieres_premieres": 1, "agricole": 0, "immobilier_cote": 0, "crypto": 15, "liquidites": 2 },
       "inclinaison_max": 0.5,
-      "max_titres_vifs": 35,
       "risque_max_sri": 7
     }
   },
@@ -82,7 +137,6 @@
     "vix": "tv:TVC:VIX"
   },
   "selection": {
-    "instruments_par_poche_max": 3,
     "etf_encours_min_eur": 50000000,
     "etf_spread_max_bps": 30,
     "action_valeur_echangee_min_eur": 500000,
@@ -94,7 +148,53 @@
     "liste_blanche_liquidites_pea": ["isin:IE000I4R3252"],
     "ordre_min_eur": 50,
     "cryptos_proposees": ["crypto:BTC", "crypto:ETH", "crypto:SOL"],
-    "donnees_max_jours": 7
+    "donnees_max_jours": 7,
+    "univers_actions_directes": [
+      "isin:FR0000121972",
+      "isin:FR0000120271",
+      "isin:NL0000235190",
+      "isin:FR0000120073",
+      "isin:FR0000073272",
+      "isin:FR0000131104",
+      "isin:FR0000121014",
+      "isin:FR0000120321",
+      "isin:FR0000120578",
+      "isin:FR0000120628",
+      "isin:FR0000125486",
+      "isin:FR0000121667",
+      "isin:FR0000130809",
+      "isin:FR0010208488",
+      "isin:FR0000052292",
+      "isin:FR0000120644",
+      "isin:FR0010307819",
+      "isin:FR0000125007",
+      "isin:NL0000226223",
+      "isin:FR0000133308",
+      "isin:LU1598757687",
+      "isin:FR001400AJ45",
+      "isin:FR0000130577",
+      "isin:FR0000121329",
+      "isin:FR0000124141",
+      "isin:FR0000121485",
+      "isin:FR0000125338",
+      "isin:FR0000045072",
+      "isin:FR0014003TT8",
+      "isin:FR0000120693",
+      "isin:NL0006294274",
+      "isin:FR0000120172",
+      "isin:FR0006174348",
+      "isin:FR0000120503",
+      "isin:FR0014000MR3",
+      "isin:NL00150001Q9",
+      "isin:FR0000120404",
+      "isin:FR0000130452",
+      "isin:FR0000131906"
+    ],
+    "_doc_actions_directes": "Actions en direct : uniquement les valeurs du CAC 40 (liste vérifiée le 20/11/2026 ; prochaine révision de l'indice le 10/12/2026, effet le 21/12/2026 : mets la liste à jour). Elles sont choisies par le score du screener mensuel : au moins titres_score_min et une tendance d'au moins titres_tendance_min pour entrer, au moins titres_garder_score_min pour rester. Leur part dans la poche Actions et leur nombre dépendent du profil (titres_vifs).",
+    "titres_score_min": 60,
+    "titres_tendance_min": 50,
+    "titres_garder_score_min": 45,
+    "instruments_par_poche_max": 3
   },
   "couts": {
     "_doc": "Coûts estimés par type de compte : courtage en points de base (1 bp = 0,01 %), minimum par ordre en €, frais de change pour un titre hors EUR. Ajuste-les à ton courtier.",
@@ -110,8 +210,7 @@
   },
   "proxies": {
     "_doc": "Série historique (identifiant du référentiel, publiée par le robot ou lue chez Binance) qui mesure chaque poche : scores, régime, volatilité, corrélations. type TR = rendement total (dividendes inclus, seul admis) ; spot = cours d'un métal physique (sans revenu, admis) ; null = aucune série fiable : la poche garde son poids de profil, sans inclinaison, confiance faible.",
-    "actions_etf": { "id": "isin:LU1681043599", "type": "TR", "label": "ETF MSCI World (CW8)" },
-    "actions_titres": { "id": "isin:LU1681043599", "type": "TR", "label": "ETF MSCI World (CW8), faute d'indice de titres en direct" },
+    "actions": { "id": "isin:LU1681043599", "type": "TR", "label": "ETF MSCI World (CW8)" },
     "obligations": { "id": "isin:IE00B4WXJJ64", "type": "TR", "label": "ETF obligations d'État zone euro (IEGA)" },
     "or": { "id": "isin:IE00B4ND3602", "type": "TR", "label": "ETC or physique (IGLN, converti en euros)" },
     "argent": { "id": null, "type": null, "label": "aucune série fiable (ETC coupé avant 2026, contrat à terme refusé)" },
@@ -122,5 +221,15 @@
     "immobilier_cote": { "id": null, "type": null, "label": "aucun ETF immobilier dans le référentiel" },
     "crypto": { "id": "crypto:BTC", "type": "TR", "label": "Bitcoin (Binance, converti en euros)", "jours_par_an": 365 },
     "liquidites": { "id": null, "type": "cash", "label": "espèces : volatilité nulle, jamais inclinées" }
+  },
+  "optimiseur": {
+    "_doc": "Algorithme : pour chaque profil, répartition qui maximise le rendement attendu sans dépasser la volatilité cible (× facteur de l'horizon), dans les bornes du profil. Rendement attendu = taux sans risque + sharpe_prior × volatilité de la classe × (1 + inclinaison selon le score de rotation). Même sharpe_prior pour toutes les classes : l'algorithme ne parie pas sur une classe, il diversifie (corrélations) et suit la tendance. Covariance hebdomadaire sur 3 ans, rétrécie (Ledoit-Wolf). Une classe sans série fiable garde son poids de référence (dans ses bornes).",
+    "sharpe_prior": 0.3
+  },
+  "validation": {
+    "_doc": "Contrôles automatiques de chaque profil avant affichage : backtest mois par mois avec les seules données connues à chaque date (hors échantillon), puis : volatilité réalisée au plus marge_vol × la cible ; perte maximale au plus perte_max du profil, y compris pendant chaque crise ; profils rangés du moins au plus risqué ; Sharpe pas plus de ecart_sharpe_max sous celui du modèle de référence ; bornes respectées à chaque décision. Un profil qui échoue est refusé (motif affiché) et remplacé par son modèle de référence.",
+    "marge_vol": 1.35,
+    "ecart_sharpe_max": 0.25,
+    "crises": [{"label":"Krach du Covid", "de":"2020-02-19", "a":"2020-04-30"}, {"label":"Inflation et hausse des taux", "de":"2022-01-03", "a":"2022-10-31"}]
   }
 }

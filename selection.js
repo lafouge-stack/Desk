@@ -65,11 +65,16 @@ function candidates(pid,ctx){
   var Td=new Date(ctx.T||Date.now()).toISOString().slice(0,10),maxAge=nz(sc.donnees_max_jours,7),minN=nz(sc.historique_min_seances_monetaire,60);
   var accs=(ctx.accounts||[]).filter(function(a){return TRADABLE[a.account_type];}),hasAcc=accs.length>0;
   var hasPEA=accs.some(function(a){return a.account_type==="PEA"&&!a.pea_full;});
+  var univ=sc.univers_actions_directes||[];
   ref.forEach(function(i){
-    if(!i||ctx.pocheOf(i)!==pid)return;
+    if(!i)return;var ip=ctx.pocheOf(i);
+    if(pid==="actions_etf"){if(ip!=="actions"||i.vehicle==="titre")return;}
+    else if(pid==="actions_titres"){if(ip!=="actions"||i.vehicle!=="titre")return;}
+    else if(ip!==pid)return;
     var o={i:i,id:i.id,ok:true,why:"",score:50,reasons:[],held:nz(ctx.held&&ctx.held[i.id],0)};
     var no=function(w){if(o.ok){o.ok=false;o.why=w;}};
     var w=CK.allow?CK.allow.why(i,P):"Garde-fou absent.";if(w)no(w);
+    if(o.ok&&i.vehicle==="titre"&&ip==="actions"&&univ.length&&univ.indexOf(i.id)<0)no("Actions en direct limitées aux valeurs du CAC 40.");
     if(o.ok&&i.asset_class==="stablecoin"&&pid==="crypto"&&!(P.classes&&P.classes.stablecoin))no("Stablecoin non coché.");
     if(o.ok&&!regionOk(i,F.regions))no("Zone hors de tes filtres.");
     if(o.ok&&!ccyOk(i,F.devises))no("Devise hors de tes filtres ("+i.currency+").");
@@ -105,8 +110,30 @@ function stockOnly(cands){var ok=cands.filter(function(c){return c.ok;});return 
 function viable(pid,cands){
   var ok=cands.filter(function(c){return c.ok;});
   if(!ok.length){var w=cands.length?cands[0].why:"Aucun instrument de cette poche dans le référentiel.";return {ok:false,why:"Aucun instrument proposable : "+w.replace(/\.$/,"").replace(/^./,function(c){return c.toLowerCase();})+"."};}
-  if(stockOnly(cands)&&!ok.some(function(c){return c.held>0;}))return {ok:false,why:"Aucun titre détenu : le choix de nouveaux titres en direct viendra avec le screener mensuel."};
+  if(pid!=="actions"&&pid!=="actions_titres"&&stockOnly(cands)&&!ok.some(function(c){return c.held>0;}))return {ok:false,why:"Aucun titre détenu : le Desk ne choisit de nouveaux titres en direct que parmi les valeurs du CAC 40 (poche Actions)."};
   return {ok:true,why:""};
+}
+
+/* ---------- Actions françaises en direct (poche Actions) ---------- */
+/**
+ * Plan des actions en direct pour un profil : valeurs du CAC 40 autorisées, notées par le screener mensuel (ctx.stocks : {id: {score, trend, label}}).
+ * Entrée : score ≥ titres_score_min et tendance ≥ titres_tendance_min, étiquette autre que Réduire ; une ligne détenue reste tant que son score ≥ titres_garder_score_min.
+ * Au plus « nombre » titres (profil), part de la poche Actions = part_max × (titres retenus / nombre). Sans scores : on garde les titres détenus.
+ * Renvoie {ids, share, notes, rows: [{id, score, held, kept}]}.
+ */
+function stocksPlan(cands,ctx,prof){
+  var sc=selCfg(),tv=prof&&prof.titres_vifs||{},N=Math.max(0,Math.round(nz(tv.nombre,0))),pm=Math.max(0,Math.min(100,nz(tv.part_max,0)))/100,notes=[];
+  var st=ctx.stocks||null,ok=(cands||[]).filter(function(c){return c.ok&&c.i.vehicle==="titre";});
+  if(!(ctx.prefs&&ctx.prefs.vehicles&&ctx.prefs.vehicles.titre)||!N||!pm)return {ids:[],share:0,notes:notes,rows:[]};
+  if(!st){var held=ok.filter(function(c){return c.held>0;});if(held.length)notes.push("Scores du screener indisponibles : les actions détenues sont gardées, aucune nouvelle n'est choisie.");
+    return {ids:held.map(function(c){return c.id;}),share:held.length?pm*Math.min(1,held.length/N):0,notes:notes,rows:[]};}
+  var smin=nz(sc.titres_score_min,60),tmin=nz(sc.titres_tendance_min,50),keep=nz(sc.titres_garder_score_min,45),rows=[];
+  ok.forEach(function(c){var x=st[c.id];if(!x||!fin(x.score))return;var isH=c.held>0,enter=x.score>=smin&&nz(x.trend,0)>=tmin&&x.label!=="RÉDUIRE",stay=isH&&x.score>=keep&&x.label!=="RÉDUIRE";
+    if(enter||stay)rows.push({id:c.id,score:x.score,held:isH,kept:stay&&!enter});});
+  // les lignes détenues qui restent passent d'abord (moins de rotation), puis le meilleur score
+  rows.sort(function(a,b){return (b.held-a.held)||(b.score-a.score)||(a.id<b.id?-1:1);});
+  var pick=rows.slice(0,N);pick.sort(function(a,b){return b.score-a.score;});
+  return {ids:pick.map(function(r){return r.id;}),share:pick.length?pm*Math.min(1,pick.length/N):0,notes:notes,rows:pick};
 }
 
 /* ---------- Choix des instruments d'une poche (montant cible en €) ---------- */
@@ -119,6 +146,10 @@ function pick(pid,cands,target,B,ctx){
   var sc=selCfg(),NMAX=nz(sc.instruments_par_poche_max,3),cap=nz(ctx.prefs&&ctx.prefs.limits&&ctx.prefs.limits.max_par_instrument,100)/100*B,flags=[],used=ctx.used||{};
   var capOf=function(l){return Math.max(0,cap-nz(used[l.c.id],0));};
   var ok=cands.filter(function(c){return c.ok;});if(!(target>0)||!ok.length)return {lines:[],flags:flags};
+  if(pid==="actions_titres"){var plan=ctx.stockIds||ok.map(function(c){return c.id;}),sel=plan.map(function(id){return ok.filter(function(c){return c.id===id;})[0];}).filter(Boolean);
+    if(!sel.length)return {lines:[],flags:flags};
+    var ls=sel.map(function(c){return {c:c,amount:target/sel.length};});capFill(ls,capOf,flags,target,[],sel.length);
+    return {lines:ls.map(function(l){return {i:l.c.i,id:l.c.id,amount:l.amount,held:l.c.held,score:l.c.score,reasons:l.c.reasons};}),flags:flags};}
   var grp=function(c){return c.i.alt_group||c.i.id;},chosen=[],seen=dict();
   var held=ok.filter(function(c){return c.held>0;}).sort(function(a,b){return b.held-a.held;});
   held.forEach(function(c){chosen.push(c);seen[grp(c)]=1;});
@@ -189,14 +220,14 @@ function place(targets,cands,pf,opts){
     room[a.id]=a.account_type==="PEA"||a.account_type==="PEA_PME"?(fin(a.pea_left)?Math.max(0,a.pea_left):Infinity):Infinity;});
   (pf.holdings||[]).forEach(function(h){if(!heldE[h.account_id]||h.locked||!(h.value>0))return;var a=h.account_id;
     heldE[a][h.instrument_id]=(heldE[a][h.instrument_id]||0)+h.value;budget[a]+=h.value;hInfo[a+"|"+h.instrument_id]=h;
-    var p=h.poche||"autre";heldP[a][p]=(heldP[a][p]||0)+h.value;});
+    var p=h.sleeve||h.poche||"autre";heldP[a][p]=(heldP[a][p]||0)+h.value;});
   // versement du mois : selon tes pourcentages, sinon libre
   var flex=0,split=opts.split||{},sk=Object.keys(split).filter(function(k){return heldE[k]&&split[k]>0;}),st=sk.reduce(function(s,k){return s+split[k];},0);
   if(C>0&&st>0)sk.forEach(function(k){var x=C*split[k]/st,ok=Math.min(x,room[k]);contrib[k]+=ok;budget[k]+=ok;room[k]-=ok;if(x-ok>0.005){flex+=x-ok;
       flags.push({level:"attention",msg:"Plafond de versements atteint sur "+nameOf(accs,k)+" : "+eur(x-ok)+" du versement vont vers un autre compte."});}});
   else flex=C;
   var canE=function(a,p){if(p==="liquidites")return true;var cs=cands[p]||[];
-    if(stockOnly(cs))return (heldP[a.id][p]||0)>0;
+    if(p!=="actions_titres"&&stockOnly(cs))return (heldP[a.id][p]||0)>0;
     return cs.some(function(c){return c.ok&&accepts(a.account_type,c.i).ok;});};
   var rows=accs.map(function(a){return {id:a.id,a:a,cap:budget[a.id]};});
   if(flex>0.005)rows.push({id:"__flex",flex:true,cap:flex});
@@ -269,5 +300,5 @@ function peaSwitch(line,prefs){
   return {i:i,line:line,alts:alts,why:st.reason,tax:saleTax(line.value,line.account_type||"CTO",gs),deposit:line.value};
 }
 
-CK.sel={TRADABLE:TRADABLE,nameOf:nameOf,ENV_ORDER:ENV_ORDER,accepts:accepts,orderCost:orderCost,saleTax:saleTax,candidates:candidates,viable:viable,stockOnly:stockOnly,pick:pick,place:place,peaSwitch:peaSwitch};
+CK.sel={stocksPlan:stocksPlan,TRADABLE:TRADABLE,nameOf:nameOf,ENV_ORDER:ENV_ORDER,accepts:accepts,orderCost:orderCost,saleTax:saleTax,candidates:candidates,viable:viable,stockOnly:stockOnly,pick:pick,place:place,peaSwitch:peaSwitch};
 })();

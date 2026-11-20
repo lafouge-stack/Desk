@@ -27,7 +27,8 @@ function frDate(iso){var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||""));retu
 /* ---------- Poches (allocation.json) ---------- */
 function poches(){var p=cfg().poches;return Array.isArray(p)?p.filter(function(x){return x&&typeof x.id==="string";}):[];}
 function poche(id){return poches().filter(function(p){return p.id===id;})[0]||null;}
-function label(id){var p=poche(id);return p?p.label:id;}
+var SLEEVES={actions_etf:"Actions (ETF)",actions_titres:"Actions françaises en direct"};
+function label(id){var p=poche(id);return p?p.label:SLEEVES[id]||id;}
 var SAFE=["liquidites","obligations","or"],DEFENSIVE=["liquidites","obligations"];
 /** Poche d'un instrument : classe exacte puis classes parentes, en respectant les types de produit de la poche. */
 function pocheOf(i){
@@ -241,7 +242,7 @@ function universe(prefs,cands){
 
 /* ---------- Étape 2 : poids du profil × horizon, restreints à l'univers ---------- */
 function strategic(prefs,U,log){
-  var C=cfg(),prof=(C.profils||{})[prefs.risk_profile]||{},raw=prefs.poids_perso||prof.poids||{},w=dict(),f=nz(((C.horizons||{})[prefs.horizon]||{}).facteur_risque,1);
+  var C=cfg(),prof=(C.profils||{})[prefs.risk_profile]||{},raw=prefs.poids_perso||prof.poids_reference||prof.poids||{},w=dict(),f=nz(((C.horizons||{})[prefs.horizon]||{}).facteur_risque,1);
   poches().forEach(function(p){w[p.id]=Math.max(0,nz(raw[p.id],0));});
   var profW=dict();Object.keys(w).forEach(function(k){profW[k]=w[k];});
   if(f<1){var moved=0;Object.keys(w).forEach(function(k){if(DEFENSIVE.indexOf(k)<0){moved+=w[k]*(1-f);w[k]*=f;}});
@@ -280,11 +281,6 @@ function run(input){
     U.filter(function(p){return keep.indexOf(p)<0;}).forEach(function(p){UN.excluded.push({id:p,label:label(p),why:"Pas encore de données à cette date."});});U=UN.U=keep;}
   log.push("Univers : "+(U.length?U.map(label).join(", "):"aucune poche")+".");
   if(!U.length)return {ok:false,why:"Aucune classe proposable avec tes règles : coche au moins une classe et un type de produit.",excluded:UN.excluded};
-  // 2. profil × horizon
-  var ST=strategic(P,U,log),w=ST.w;
-  log.push("Profil "+(prof.label||P.risk_profile)+(ST.perso?" (poids personnalisés)":"")+" : "+U.map(function(p){return label(p)+" "+pct1(w[p]);}).join(" · ")+".");
-  var steps={strategic:Object.assign(dict(),w)};
-  // métriques, scores, régime
   // métriques, scores et régime ne dépendent pas de tes cases : mémorisés (input.memo) pour recalculer vite
   var R=input.ref||null,memo=input.memo&&typeof input.memo==="object"?input.memo:{},mk="T"+T;
   if(!memo[mk]){var mm={met:dict(),sco:dict()};
@@ -293,10 +289,30 @@ function run(input){
     mm.reg=regimeAt(R,input.vix,T);var REGp=[1,2].map(function(k){return regimeAt(R,input.vix,monthEnd(T,k)).id;});
     mm.reg.stable=mm.reg.id!=="inconnu"&&REGp.every(function(x){return x===mm.reg.id;});mm.cov=dict();memo[mk]=mm;}
   var met=memo[mk].met,sco=memo[mk].sco,REG=memo[mk].reg;
-  // 3. inclinaison par le score
+  var ck=U.join(","),cov=memo[mk].cov[ck]||(memo[mk].cov[ck]=covariance(input.series||{},U.filter(function(p){return p!=="liquidites";}),T));
+  // 2. allocation stratégique : calculée par l'algorithme (optimiseur) pour le profil, sauf poids personnalisés ou repli après un échec des contrôles
+  var ref_=strategic(Object.assign({},P,{poids_perso:null}),U,[]),hf=nz(((C.horizons||{})[P.horizon]||{}).facteur_risque,1);
+  var useAlgo=!P.poids_perso&&!input.fallback&&!!CK.opt,ST,w,OPT=null;
+  if(useAlgo){
+    var sig=dict(),scs=dict(),fixed=dict();
+    cov.ids.forEach(function(p,i){sig[p]=Math.sqrt(Math.max(0,cov.S[i][i]));});
+    U.forEach(function(p){if(sco[p])scs[p]=sco[p].score;if(p!=="liquidites"&&cov.ids.indexOf(p)<0){var b=((prof.bornes||{})[p])||[0,100];fixed[p]=Math.min(nz(b[1],100)/100,Math.max(nz(b[0],0)/100,ref_.w[p]||0));}});
+    OPT=CK.opt.allocate(U,{profile:P.risk_profile,horizonFactor:hf,cov:cov,sig:sig,scores:scs,rf:nz(input.rf,0),fixed:fixed,tilt:input.overrides&&input.overrides.tilt});
+    w=OPT.w;ST={w:w,profile:dict(),factor:hf,perso:false,algo:true};poches().forEach(function(p){ST.profile[p.id]=nz((prof.poids_reference||{})[p.id],0);});
+    OPT.notes.forEach(function(n){flags.push({level:"attention",code:n.code,msg:n.msg});});
+    log.push("Algorithme, profil "+(prof.label||P.risk_profile)+" (volatilité cible "+pct1(OPT.target)+") : "+U.map(function(p){return label(p)+" "+pct1(w[p]);}).join(" · ")+"."+
+      (Object.keys(fixed).length?" Sans série fiable, au poids de référence : "+Object.keys(fixed).map(label).join(", ")+".":""));
+  }else{
+    ST=strategic(P,U,log);w=ST.w;
+    if(input.fallback)flags.push({level:"attention",code:"fallback",msg:"Allocation de l'algorithme refusée par les contrôles pour ce profil ("+input.fallback+") : modèle de référence du profil utilisé à la place."});
+    log.push((ST.perso?"Poids personnalisés":"Modèle de référence du profil "+(prof.label||P.risk_profile))+" : "+U.map(function(p){return label(p)+" "+pct1(w[p]);}).join(" · ")+".");
+  }
+  var steps={strategic:Object.assign(dict(),w),reference:Object.assign(dict(),ref_.w)};
+  // 3. inclinaison par le score (déjà incluse dans le rendement attendu de l'algorithme)
   var tilt=input.overrides&&fin(input.overrides.tilt)?input.overrides.tilt:nz(prof.inclinaison_max,0.25),w3=dict();
-  U.forEach(function(p){var s=sco[p]&&sco[p].score,t=p==="liquidites"||s==null?0:Math.max(-0.5,Math.min(0.5,tilt*(s-50)/50));w3[p]=w[p]*(1+t);});
-  w3=project(w3,U,[],{},flags);steps.tilted=Object.assign(dict(),w3);
+  if(useAlgo)U.forEach(function(p){w3[p]=w[p];});
+  else{U.forEach(function(p){var s=sco[p]&&sco[p].score,t=p==="liquidites"||s==null?0:Math.max(-0.5,Math.min(0.5,tilt*(s-50)/50));w3[p]=w[p]*(1+t);});w3=project(w3,U,[],{},flags);}
+  steps.tilted=Object.assign(dict(),w3);
   // 4. régime : part du risque déplacée vers les refuges cochés
   var w4=Object.assign(dict(),w3),tr=nz((C.regime||{}).transfert_risk_off_pct,30)/100;
   if(REG.id==="risk_off"||REG.id==="haute_volatilite"){var safe=SAFE.filter(function(p){return U.indexOf(p)>=0;}),risky=U.filter(function(p){return safe.indexOf(p)<0;});
@@ -305,7 +321,7 @@ function run(input){
     else if(risky.length)flags.push({level:"attention",msg:"Régime "+REG.label+", mais aucune classe refuge (liquidités, obligations, or) n'est cochée : aucun transfert possible."});}
   steps.regime=Object.assign(dict(),w4);
   // 5. cible de volatilité
-  var ck=U.join(","),cov=memo[mk].cov[ck]||(memo[mk].cov[ck]=covariance(input.series||{},U.filter(function(p){return p!=="liquidites";}),T)),vc=nz(prof.vol_cible,null)/100,w5=Object.assign(dict(),w4),alpha=0;
+  var vc=nz(prof.vol_cible,null)/100*(useAlgo?hf:1),w5=Object.assign(dict(),w4),alpha=0;
   var sv=sigma(w5,cov);
   if(cov.unmeasured.length&&U.some(function(p){return cov.unmeasured.indexOf(p)>=0&&w5[p]>0.001;}))flags.push({level:"info",msg:"Volatilité estimée sans "+cov.unmeasured.filter(function(p){return U.indexOf(p)>=0;}).map(label).join(", ")+" (historique insuffisant)."});
   if(sv!=null&&vc>0&&sv>vc){
@@ -351,17 +367,30 @@ function run(input){
   steps.final=Object.assign(dict(),tw);
   if(input.lite){var scores=dict();U.forEach(function(p){scores[p]=sco[p]?sco[p].score:null;});
     return {ok:true,lite:true,asOf:D.date,T:T,month:D.month,regime:REG,universe:U,excluded:UN.excluded,steps:steps,final:tw,scores:scores,alpha:alpha,flags:flags,log:log,
-      sigma:sigma(tw,cov),frozen:Object.keys(frozen)};}
+      sigma:sigma(tw,cov),frozen:Object.keys(frozen),algo:useAlgo,target:OPT?OPT.target:vc,profile:P.risk_profile};}
   // 10. instruments puis enveloppes
   var picks=dict(),pflags=[],placed=null;
   var Bp=B>0?B:10000;   // sans portefeuille ni versement : choix des instruments sur une base fictive (seuls les poids s'affichent)
+  // poche Actions : partagée entre ETF et actions françaises en direct (CAC 40, choisies par le screener mensuel)
+  var sleeves=dict(),plan=null;
+  if(U.indexOf("actions")>=0&&CK.sel.stocksPlan){
+    sleeves.actions_etf=CK.sel.candidates("actions_etf",ctx);var ct=CK.sel.candidates("actions_titres",ctx);
+    plan=CK.sel.stocksPlan(ct,Object.assign({},ctx,{stocks:input.stocks||null}),prof);plan.notes.forEach(function(n){flags.push({level:"info",msg:n});});
+    if(!sleeves.actions_etf.some(function(c){return c.ok;}))plan.share=plan.ids.length?1:0;   // sans ETF autorisé, tout va aux titres retenus
+    sleeves.actions_titres=ct.map(function(c){var inP=plan.ids.indexOf(c.id)>=0,x=input.stocks&&input.stocks[c.id];
+      return inP||!c.ok?c:Object.assign({},c,{ok:false,why:"Pas retenue ce mois-ci par le screener"+(x&&fin(x.score)?" (score "+Math.round(x.score)+"/100)":"")+"."});});
+    ctx.stockIds=plan.ids;
+    if(plan.ids.length)log.push("Actions en direct : "+plan.ids.map(function(id){var i=CK.ref.get(id);return i?i.symbol:id;}).join(", ")+" ("+pct1(plan.share)+" de la poche Actions, poids égaux).");}
+  var split=function(p,amt){return p==="actions"&&plan?[["actions_etf",amt*(1-plan.share)],["actions_titres",amt*plan.share]]:[[p,amt]];};
+  var candsOf=function(k){return sleeves[k]||cands[k];};
   if(hasPf){
     // cible de chaque poche en € (hors lignes bloquées), répartie entre tes comptes, puis instruments compte par compte
-    var tg=dict();U.forEach(function(p){tg[p]=Math.max(0,tw[p]*B-nz(locked[p],0));});
-    placed=CK.sel.place(tg,cands,{accounts:cur.accounts,holdings:cur.holdings},{contribution:Cc,split:P.contribution_split,unit:input.unit,B:B,ctx:ctx});
-    U.forEach(function(p){picks[p]={lines:placed.lines[p]||[],flags:[]};});
+    var tg=dict(),cc=dict();U.forEach(function(p){split(p,Math.max(0,tw[p]*B-nz(locked[p],0))).forEach(function(x){tg[x[0]]=x[1];cc[x[0]]=candsOf(x[0]);});});
+    placed=CK.sel.place(tg,cc,{accounts:cur.accounts,holdings:cur.holdings},{contribution:Cc,split:P.contribution_split,unit:input.unit,B:B,ctx:ctx});
+    U.forEach(function(p){var ls=[];split(p,0).forEach(function(x){ls=ls.concat(placed.lines[x[0]]||[]);});picks[p]={lines:ls,flags:[]};});
   }else U.forEach(function(p){if(p==="liquidites")return;var amt=tw[p]*Bp;if(!(amt>0.5)){picks[p]={lines:[],flags:[]};return;}
-    var pk=CK.sel.pick(p,cands[p],amt,Bp,ctx);picks[p]=pk;pk.flags.forEach(function(f){pflags.push(Object.assign({poche:p},f));});});
+    var ls=[];split(p,amt).forEach(function(x){if(!(x[1]>0.5))return;var pk=CK.sel.pick(x[0],candsOf(x[0]),x[1],Bp,ctx);ls=ls.concat(pk.lines);pk.flags.forEach(function(f){pflags.push(Object.assign({poche:p},f));});});
+    picks[p]={lines:ls,flags:[]};});
   // poids obtenus après placement (ce qui ne se loge pas reste en espèces)
   var wf=dict();allP.forEach(function(p){wf[p]=0;});
   if(placed&&B>0){
@@ -391,9 +420,10 @@ function run(input){
     var why=[],add=function(v,t){if(t)why.push({v:Math.abs(nz(v,0)),t:t});};
     if(!inU)add(1,(ex?ex.why:"Hors de tes règles.")+(isHeld?" Vente de la poche proposée.":""));
     else{
-      add(Math.abs(ST.w[p]-nz(ST.profile[p],0)/100)+0.001,"Poids "+(ST.perso?"personnalisé":"du profil "+(prof.label||""))+" : "+pct1(nz(ST.profile[p],0)/100)+(Math.abs(ST.w[p]-nz(ST.profile[p],0)/100)>0.0005?", ramené à "+pct1(ST.w[p])+" sur tes classes cochées":"")+".");
-      if(s)add(steps.tilted[p]-ST.w[p],"Score de rotation "+Math.round(s.score)+"/100"+scoreWords(s)+" : "+pts(steps.tilted[p]-ST.w[p])+".");
-      else if(p!=="liquidites")add(0.0001,"Données insuffisantes pour un score : poids du profil sans inclinaison.");
+      if(ST.algo)add(0.001,"Calculé par l'algorithme pour le profil "+(prof.label||"")+" (volatilité cible "+pct1(vc)+") : "+pct1(ST.w[p])+(s?", score de rotation "+Math.round(s.score)+"/100"+scoreWords(s):"")+" ; modèle de référence : "+pct1(nz(ST.profile[p],0)/100)+".");
+      else add(Math.abs(ST.w[p]-nz(ST.profile[p],0)/100)+0.001,"Poids "+(ST.perso?"personnalisé":"du modèle de référence "+(prof.label||""))+" : "+pct1(nz(ST.profile[p],0)/100)+(Math.abs(ST.w[p]-nz(ST.profile[p],0)/100)>0.0005?", ramené à "+pct1(ST.w[p])+" sur tes classes cochées":"")+".");
+      if(s&&!ST.algo)add(steps.tilted[p]-ST.w[p],"Score de rotation "+Math.round(s.score)+"/100"+scoreWords(s)+" : "+pts(steps.tilted[p]-ST.w[p])+".");
+      else if(!s&&p!=="liquidites")add(0.0001,"Données insuffisantes pour un score : "+(ST.algo?"poids de référence, sans optimisation.":"poids du profil sans inclinaison."));
       if(Math.abs(steps.regime[p]-steps.tilted[p])>0.0005)add(steps.regime[p]-steps.tilted[p],"Régime "+REG.label+" : "+pts(steps.regime[p]-steps.tilted[p])+".");
       if(Math.abs(steps.voltarget[p]-steps.regime[p])>0.0005)add(steps.voltarget[p]-steps.regime[p],"Cible de volatilité "+pct1(vc)+" : "+pts(steps.voltarget[p]-steps.regime[p])+".");
       if(Math.abs(steps.constrained[p]-steps.voltarget[p])>0.0005)add(steps.constrained[p]-steps.voltarget[p],(locked[p]>0&&locked[p]/B>=steps.voltarget[p]?"Lignes que le moteur ne déplace pas (assurance-vie, compte bancaire, hors liste)":"Tes limites (plafonds, plancher)")+" : "+pts(steps.constrained[p]-steps.voltarget[p])+".");
@@ -425,7 +455,7 @@ function run(input){
   var sellsEUR=orders.reduce(function(s,o){return s+(!o.skipped&&o.side==="vente"?o.amount:0);},0);
   var neff=function(o){var s=0,t=0;allP.forEach(function(p){if(p==="liquidites")return;t+=o[p]||0;});if(!(t>0))return null;allP.forEach(function(p){if(p==="liquidites")return;var x=(o[p]||0)/t;s+=x*x;});return s>0?1/s:null;};
   return {ok:true,v:1,asOf:D.date,T:T,month:D.month,monthLabel:D.monthLabel,dataLabel:D.dataLabel,computed_at:nz(input.now,Date.now()),prefs_hash:hash(P),
-    profile:{id:P.risk_profile,label:prof.label||P.risk_profile,vol_cible:vc,perso:ST.perso},horizon:P.horizon,pea_mode:P.pea_mode,regime:REG,
+    profile:{id:P.risk_profile,label:prof.label||P.risk_profile,vol_cible:vc,perso:ST.perso,algo:!!ST.algo},stocks:plan,horizon:P.horizon,pea_mode:P.pea_mode,regime:REG,
     universe:U,excluded:UN.excluded,steps:steps,decisions:decisions,orders:orders,unplaced:placed?placed.unplaced:[],contrib:placed?placed.contrib:null,
     totals:{base:B,value:V0,contribution:Cc,cost:tc,tax:tt,turnover:B>0?sellsEUR/B:0,sigma_before:sigB,sigma_after:sigA,sigma_engine:sigma(steps.final,cov),
       neff_before:neff(w0),neff_after:neff(wf),cov_weeks:cov.weeks,cov_from:cov.from,cov_to:cov.to,shrink:cov.delta,alpha:alpha},
@@ -477,7 +507,7 @@ function current(P,V,Cc){
     out.value+=Math.max(0,cash);});
   (V.lines||[]).forEach(function(L){if(!(L.value>0)){if(L.quantity>0)out.unpriced++;return;}var a=acc[L.account_id],t=a&&a.account_type,p=pocheOf(L.i);
     var lk=!tr[t]||!L.i||L.i.custom||/^perso:/.test(L.instrument_id||"");
-    out.holdings.push({account_id:L.account_id,instrument_id:L.instrument_id,i:L.i,value:L.value,quantity:L.quantity,price:L.price,fx:L.fx,pru:L.pru,fxb:L.fxb,currency:L.currency,locked:lk,poche:p,account_type:t});
+    out.holdings.push({account_id:L.account_id,instrument_id:L.instrument_id,i:L.i,value:L.value,quantity:L.quantity,price:L.price,fx:L.fx,pru:L.pru,fxb:L.fxb,currency:L.currency,locked:lk,poche:p,sleeve:p==="actions"?(L.i&&L.i.vehicle==="titre"?"actions_titres":"actions_etf"):p,account_type:t});
     out.value+=L.value;if(lk&&p)out.locked[p]=(out.locked[p]||0)+L.value;});
   var B=out.value+Math.max(0,nz(Cc,0));
   poches().forEach(function(p){out.w0[p.id]=0;});

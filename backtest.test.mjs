@@ -29,7 +29,7 @@ function walk(seed, drift, vol, from = "2015-01-05", py = 252) {
 }
 function market() {
   const eq = walk(1, 0.08, 0.16);
-  return { series: { actions_etf: eq, obligations: walk(2, 0.02, 0.05), or: walk(3, 0.05, 0.14, "2018-01-02") }, ref: eq, vix: { t: eq.t, c: eq.c.map(() => 18) },
+  return { series: { actions: eq, obligations: walk(2, 0.02, 0.05), or: walk(3, 0.05, 0.14, "2018-01-02") }, ref: eq, vix: { t: eq.t, c: eq.c.map(() => 18) },
     rf: { d: ["2015-01", "2020-01", "2024-01"], v: [0.5, -0.5, 3.5] } };
 }
 const prefs = (CK, extra = {}) => CK.models.normPrefs(Object.assign({ saved: true, risk_profile: "modere",
@@ -71,9 +71,9 @@ describe("mécanique", () => {
   test("coût d'un ordre de 50 € = minimum par ordre ; gains réalisés au prix de revient moyen", () => {
     const { BT, CK } = setup(); const b = BT.book("x"); b.val.liquidites = 1000; b.basis.liquidites = 1000;
     const ctx = { costs: true, env: "CTO", tax: "CTO", instr: (p) => CK.ref.get(ALLOC.proxies[p].id) };
-    const x = BT.rebalance(b, { actions_etf: 0.05, liquidites: 0.95 }, ctx);
+    const x = BT.rebalance(b, { actions: 0.05, liquidites: 0.95 }, ctx);
     assert.ok(Math.abs(x.cost - CK.sel.orderCost(50, "CTO", CK.ref.get("isin:LU1681043599"))) < 1e-9);
-    b.val.actions_etf *= 2; BT.rebalance(b, { liquidites: 1 }, Object.assign({}, ctx, { costs: false }));
+    b.val.actions *= 2; BT.rebalance(b, { liquidites: 1 }, Object.assign({}, ctx, { costs: false }));
     assert.ok(Math.abs(b.yearReal - b.real) < 1e-9 && b.real > 40, "plus-value réalisée sur la vente");
   });
   test("compte-titres : impôt sur le gain net de l'année ; une moins-value est reportée puis imputée", () => {
@@ -98,7 +98,7 @@ describe("backtest complet", () => {
   test("aucun regard vers l'avenir : changer les cours après une date ne change aucune décision jusqu'à cette date", () => {
     const { BT, CK } = setup(); const m = market(), cut = Date.parse("2021-06-15T00:00:00Z");
     const bump = (S) => ({ t: S.t, c: S.c.map((v, i) => (S.t[i] > cut ? v * (i % 2 ? 2.5 : 0.3) : v)) });
-    const m2 = Object.assign({}, m, { series: Object.fromEntries(Object.entries(m.series).map(([k, v]) => [k, bump(v)])) }); m2.ref = m2.series.actions_etf;   // comme dans m : la référence EST la série actions
+    const m2 = Object.assign({}, m, { series: Object.fromEntries(Object.entries(m.series).map(([k, v]) => [k, bump(v)])) }); m2.ref = m2.series.actions;   // comme dans m : la référence EST la série actions
     const a = BT.run(Object.assign({ prefs: prefs(CK), now: NOW }, m)), b = BT.run(Object.assign({ prefs: prefs(CK), now: NOW }, m2));
     const before = (R) => R.journal.filter((j) => Date.parse(j.date) < cut).map((j) => [j.date, j.w, j.regime]);
     assert.ok(before(a).length > 50); assert.deepEqual(JSON.parse(JSON.stringify(before(a))), JSON.parse(JSON.stringify(before(b))));

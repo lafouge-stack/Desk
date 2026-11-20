@@ -29,7 +29,7 @@ var LBL={"RENFORCER":["up","Renforcer"],"CONSERVER":["keep","Conserver"],"SURVEI
 var GROUPS=[{id:"tous",label:"Tous"},{id:"actions_etf",label:"ETF actions"},{id:"actions_titres",label:"Actions"},{id:"obligations",label:"Obligations"},
   {id:"mp",label:"Matières premières"},{id:"immobilier_cote",label:"Immobilier"},{id:"crypto",label:"Crypto"},{id:"liquidites",label:"Monétaire"}];
 var MP={or:1,argent:1,petrole:1,gaz:1,matieres_premieres:1,agricole:1};
-function groupOf(i){var p=CK.alloc?CK.alloc.pocheOf(i):null;return MP[p]?"mp":p||"autre";}
+function groupOf(i){var p=CK.alloc?CK.alloc.pocheOf(i):null;if(p==="actions")return i&&i.vehicle==="titre"?"actions_titres":"actions_etf";return MP[p]?"mp":p||"autre";}
 var COLS=[{k:"nom",l:"Instrument"},{k:"score",l:"Score",n:1},{k:"momentum",l:"Mom.",n:1,t:"Momentum ajusté du risque (3, 6, 12 mois)"},{k:"tendance",l:"Tend.",n:1,t:"Tendance : cours vs moyennes 50 / 100 / 200 j"},
   {k:"risque",l:"Risque",n:1,t:"Baisse depuis le plus haut et perte maximale sur 12 mois (100 = le plus favorable)"},{k:"volatilite",l:"Vol.",n:1,t:"Volatilité 60 j inverse, bonus si compression"},
   {k:"diversification",l:"Divers.",n:1,t:"Diversification : (1 − corrélation) × 50"},{k:"chop",l:"Compression",n:1,t:"Indice de compression du screener crypto (CHOP 14, quotidien) et son centile sur un an"},

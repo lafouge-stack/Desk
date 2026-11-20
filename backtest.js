@@ -29,7 +29,7 @@ function ymd(t){return new Date(t).toISOString().slice(0,10);}
 function mean(a){var s=0;for(var i=0;i<a.length;i++)s+=a[i];return a.length?s/a.length:null;}
 function std(a){var m=mean(a),s=0;for(var i=0;i<a.length;i++)s+=(a[i]-m)*(a[i]-m);return a.length>1?Math.sqrt(s/(a.length-1)):null;}
 
-var PEA_OK={actions_etf:1,actions_titres:1,liquidites:1};   // poches qu'un PEA peut détenir (au niveau des classes)
+var PEA_OK={actions:1,liquidites:1};   // poches qu'un PEA peut détenir (au niveau des classes)
 var MIN_HIST=400*DAY;                                         // ~13 mois d'historique avant d'entrer dans l'univers
 
 /* ---------- Calendrier ---------- */
@@ -149,10 +149,11 @@ function create(o){
     var U=avail(T),w=dict(),j=null;
     var R=A().run({prefs:P,now:T+1,series:series,ref:o.ref,vix:o.vix,current:{w0:weightsOf(B.strategie)},restrict:U,backtest:true,lite:true,memo:memo,overrides:o.overrides});
     if(!R.ok){flags.push({level:"info",msg:"Décision du "+ymd(T)+" impossible : "+R.why});return;}
-    w.strategie=R.final;var sw=R.steps.strategic;
+    w.strategie=R.final;var sw=R.steps.reference||R.steps.strategic;   // références : le modèle fixe du profil
     if(B.fixe)w.fixe=sw;
     if(B.achat&&!B.achat.started){w.achat=sw;B.achat.started=true;}
-    j={date:ymd(T),regime:R.regime&&R.regime.label,universe:R.universe.slice(),w:dict(),frozen:R.frozen,alpha:R.alpha,sigma:R.sigma};
+    j={date:ymd(T),regime:R.regime&&R.regime.label,universe:R.universe.slice(),w:dict(),ws:dict(),frozen:R.frozen,alpha:R.alpha,sigma:R.sigma,algo:!!R.algo,target:R.target};
+    Object.keys(R.steps.strategic).forEach(function(p){j.ws[p]=Math.round(R.steps.strategic[p]*1e4)/1e4;});
     Object.keys(R.final).forEach(function(p){if(R.final[p]>0.0005)j.w[p]=Math.round(R.final[p]*1e4)/1e4;});
     journal.push(j);pending={T:T,w:w,j:j};
   }
@@ -186,11 +187,46 @@ function grid(o){
   [0,tm/2,tm].forEach(function(t){[1,2,4].forEach(function(b){out.push({tilt:t,band:b,o:Object.assign({},o,{overrides:{tilt:t},band:b,strategyOnly:true})});});});
   return out;
 }
+/* ---------- Contrôles automatiques des 4 profils ---------- */
+var ORDER=["prudent","modere","dynamique","agressif"];
+/** Pire baisse (depuis la valeur au début de la fenêtre ou un sommet atteint dedans) entre deux dates ; null si la période n'est pas couverte. */
+function windowLoss(curve,from,to){var a=Date.parse(from+"T00:00:00Z"),b=Date.parse(to+"T23:59:59Z");if(!curve.length||curve[0][0]>a||curve[curve.length-1][0]<b)return null;
+  var pk=null,dd=0;curve.forEach(function(x){if(x[0]<a-7*DAY||x[0]>b)return;if(pk==null||x[1]>pk)pk=x[1];var d=x[1]/pk-1;if(d<dd)dd=d;});return dd;}
+/**
+ * results : {profil: résultat de run() (portefeuille « strategie » = algorithme, « fixe » = modèle de référence)}.
+ * Contrôles : volatilité réalisée ≤ marge_vol × cible ; perte maximale ≤ perte_max du profil, aussi pendant chaque crise ;
+ * Sharpe ≥ Sharpe du modèle de référence − ecart_sharpe_max ; allocation de l'algorithme dans les bornes du profil à chaque décision ;
+ * profils rangés du moins au plus risqué (volatilité et perte maximale). Renvoie {profil: {ok, checks:[{k, label, ok, val, lim, txt}], m, ref}}.
+ */
+function checks(results){
+  var C=cfg(),V=C.validation||{},mv=nz(V.marge_vol,1.35),es=nz(V.ecart_sharpe_max,0.25),cr=Array.isArray(V.crises)?V.crises:[],out={};
+  var pct=function(x,d){return fin(x)?(Math.round(x*Math.pow(10,(d||1)+2))/Math.pow(10,d||1)).toLocaleString("fr-FR").replace(/^-/,"−")+" %":"—";};
+  ORDER.forEach(function(p){var R=results[p];if(!R||!R.ok){out[p]={ok:false,checks:[{k:"calcul",label:"Calcul",ok:false,txt:R&&R.why||"Backtest impossible."}]};return;}
+    var prof=(C.profils||{})[p]||{},s=R.books.strategie,m=s.metrics,f=R.books.fixe&&R.books.fixe.metrics,ck=[];
+    var tgt=R.journal.length&&fin(R.journal[R.journal.length-1].target)?R.journal[R.journal.length-1].target:nz(prof.vol_cible,8)/100,lim=nz(prof.validation&&prof.validation.perte_max,50)/100;
+    ck.push({k:"vol",label:"Risque tenu",ok:fin(m.vol)&&m.vol<=tgt*mv+1e-9,val:m.vol,lim:tgt*mv,txt:"volatilité réalisée "+pct(m.vol)+" pour une cible de "+pct(tgt)+" (tolérance "+pct(tgt*mv)+")"});
+    ck.push({k:"perte",label:"Perte maximale",ok:fin(m.mdd)&&-m.mdd<=lim+1e-9,val:m.mdd,lim:-lim,txt:"pire baisse "+pct(m.mdd)+" (limite du profil : −"+pct(lim).replace(/^−/,"")+")"});
+    cr.forEach(function(c){var l=windowLoss(s.curve,c.de,c.a);if(l==null){ck.push({k:"crise",label:c.label,ok:true,skip:true,txt:"période non couverte par le backtest"});return;}
+      ck.push({k:"crise",label:c.label,ok:-l<=lim+1e-9,val:l,lim:-lim,txt:"baisse "+pct(l)+" pendant la crise (limite −"+pct(lim).replace(/^−/,"")+")"});});
+    if(f&&fin(f.sharpe)&&fin(m.sharpe))ck.push({k:"sharpe",label:"Pas moins bon que la référence",ok:m.sharpe>=f.sharpe-es-1e-9,val:m.sharpe,lim:f.sharpe-es,
+      txt:"Sharpe "+m.sharpe.toFixed(2).replace(".",",")+" contre "+f.sharpe.toFixed(2).replace(".",",")+" pour le modèle de référence (écart toléré "+String(es).replace(".",",")+")"});
+    var B=prof.bornes||{},bad=0;R.journal.forEach(function(j){if(!j.algo)return;Object.keys(j.ws||{}).forEach(function(q){var b=B[q];if(!b)return;var x=j.ws[q];
+      // bornes ramenées aux classes disponibles (somme 100 %) : tolérance d'un point
+      if(x<nz(b[0],0)/100-0.01&&j.universe.length>2)bad++;if(x>nz(b[1],100)/100+0.01)bad++;});});
+    ck.push({k:"bornes",label:"Bornes du profil",ok:bad===0,val:bad,txt:bad?bad+" dépassement(s) de borne sur "+R.journal.length+" décisions":"respectées à chacune des "+R.journal.length+" décisions"});
+    out[p]={ok:ck.every(function(x){return x.ok;}),checks:ck,m:m,ref:f,value:s.value,target:tgt};});
+  // rangement du moins au plus risqué (tolérance : 0,2 point de volatilité, 1 point de perte maximale)
+  for(var k=1;k<ORDER.length;k++){var a=out[ORDER[k-1]],b=out[ORDER[k]];if(!a||!b||!a.m||!b.m)continue;
+    var okv=b.m.vol>=a.m.vol-0.002,okd=-b.m.mdd>=-a.m.mdd-0.01,lbl=((C.profils||{})[ORDER[k-1]]||{}).label||ORDER[k-1];
+    b.checks.push({k:"ordre",label:"Plus risqué que "+lbl,ok:okv&&okd,txt:okv&&okd?"volatilité "+pct(b.m.vol)+" ≥ "+pct(a.m.vol)+" et perte "+pct(b.m.mdd)+" ≤ "+pct(a.m.mdd):"profil pas plus risqué que "+lbl+" ("+pct(b.m.vol)+" / "+pct(a.m.vol)+")"});
+    if(!(okv&&okd))b.ok=false;}
+  return out;
+}
 function summarize(cells){
   var vals=function(k){return cells.map(function(c){return c.m&&c.m[k];}).filter(fin);};
   var r=function(k){var v=vals(k);return v.length?{min:Math.min.apply(null,v),max:Math.max.apply(null,v),med:v.slice().sort(function(a,b){return a-b;})[Math.floor(v.length/2)]}:null;};
   return {cagr:r("cagr"),vol:r("vol"),sharpe:r("sharpe"),mdd:r("mdd")};
 }
 
-CK.bt={create:create,run:run,grid:grid,summarize:summarize,metrics:metrics,decisions:decisions,days:days,rfFn:rfFn,rebalance:rebalance,yearEnd:yearEnd,book:book,total:total,PEA_OK:PEA_OK};
+CK.bt={checks:checks,windowLoss:windowLoss,ORDER:ORDER,create:create,run:run,grid:grid,summarize:summarize,metrics:metrics,decisions:decisions,days:days,rfFn:rfFn,rebalance:rebalance,yearEnd:yearEnd,book:book,total:total,PEA_OK:PEA_OK};
 })();

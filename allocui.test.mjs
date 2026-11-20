@@ -40,9 +40,9 @@ describe("préférences : formulaire", () => {
   });
   test("poids personnalisés et répartition du versement : contrôlés (100 %)", () => {
     const { P } = setup();
-    const w = { perso: ["1"] }; for (const q of ALLOC.poches) w["w_" + q.id] = "0"; w.w_actions_etf = "70"; w.w_liquidites = "20";
+    const w = { perso: ["1"] }; for (const q of ALLOC.poches) w["w_" + q.id] = "0"; w.w_actions = "70"; w.w_liquidites = "20";
     const p = P.fromValues(Object.assign({ cls: ["actions", "liquidites"], veh: ["etf"], sp_pea: "60", sp_cto: "30" }, w));
-    assert.equal(p.poids_perso.actions_etf, 70);
+    assert.equal(p.poids_perso.actions, 70);
     const pb = P.problems(p);
     assert.ok(pb.some((x) => /poids personnalisés font 90/.test(x))); assert.ok(pb.some((x) => /versement fait 90/.test(x)));
     assert.equal(p.vehicles.cash, true, "les liquidités sont les espèces des comptes");
@@ -61,10 +61,10 @@ describe("préférences : formulaire", () => {
     assert.equal(bad.saved, false); assert.equal(bad.poids_perso, null);
     assert.equal(M.normPrefs({ poids_perso: [1, 2] }).poids_perso, null);
   });
-  test("formulaire : avertissement exact, profils présentés comme modèles publics, sous-classes grisées sans parent", () => {
+  test("formulaire : avertissement exact, profils calculés par l'algorithme (règles publiques), sous-classes grisées sans parent", () => {
     const { P, CK } = setup();
     const h = P._t.formHTML(CK.models.normPrefs({ classes: { matieres_premieres: false, or: true } }), { accounts: [{ id: "a", name: '<img src=x onerror=1>', account_type: "PEA" }] });
-    assert.ok(h.includes(DISC)); assert.match(h, /modèles publics d'exemple/); assert.match(h, /Rien n'est calculé tant que/);
+    assert.ok(h.includes(DISC)); assert.match(h, /calculée par l'algorithme/); assert.match(h, /publics, identiques pour tous/); assert.match(h, /Rien n'est calculé tant que/);
     assert.match(h, /<label class="pr-cl d1 off"><input type="checkbox" name="cls" value="or" disabled/);
     assert.ok(!/<img/.test(h), "nom de compte échappé");
   });
@@ -85,7 +85,7 @@ describe("onglet Allocation : rendu", () => {
     CK.fx.setDaily("USD", [["2020-01-01", 0.9]]);
     const V = F.value(Pf, (id) => ({ last: 100, currency: F.instr(Pf, id)?.currency || "EUR", ts: NOW, source: "t" }));
     const p = M.normPrefs({ saved: true, classes: { actions: true, obligations: true, oblig_etat: true, liquidites: true }, vehicles: { etf: true, titre: true, cash: true }, risk_profile: "modere" });
-    const R = CK.alloc.run({ prefs: p, now: NOW, series: { actions_etf: eq, actions_titres: eq, obligations: walk(2, 0.05) }, ref: eq, vix: null, current: CK.alloc.current(Pf, V, 0) });
+    const R = CK.alloc.run({ prefs: p, now: NOW, series: { actions: eq, obligations: walk(2, 0.05) }, ref: eq, vix: null, current: CK.alloc.current(Pf, V, 0) });
     assert.equal(R.ok, true);
     const h = T.viewHTML({ prefs: p, R, journal: [], open: { [R.decisions[0].poche]: true }, hide: true, peaAlt: [] });
     assert.match(h, /Proposition de novembre 2026 selon tes règles/); assert.ok(h.includes(DISC));

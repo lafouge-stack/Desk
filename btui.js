@@ -23,7 +23,7 @@ function now(){var e=CK.dk&&CK.dk.env;return e&&typeof e.now==="function"?e.now(
 function disclaimer(){return CK.DISCLAIMER||"";}
 function label(p){return CK.alloc?CK.alloc.label(p):p;}
 
-var SERIES=[{k:"strategie",l:"Tes règles",c:"var(--pf-1)"},{k:"fixe",l:"Allocation fixe",c:"var(--pf-2)"},{k:"achat",l:"Achat-conservation",c:"var(--pf-3)"}];
+var SERIES=[{k:"strategie",l:"Tes règles",c:"var(--pf-1)"},{k:"fixe",l:"Modèle de référence",c:"var(--pf-2)"},{k:"achat",l:"Achat-conservation",c:"var(--pf-3)"}];
 var TAX=[{id:"aucune",l:"Avant impôt"},{id:"CTO",l:"Compte-titres (PFU)"},{id:"PEA",l:"PEA"}];
 
 /* ================================================================
@@ -104,14 +104,14 @@ function tile(k,v,cls,sub){return '<div class="pf-kpi"><em>'+esc(k)+'</em><b cla
 function viewHTML(st){
   var p=st.prefs||{},f=st.f||{};
   if(!p.saved)return '<div class="al-setup"><h3>Backtest de tes règles</h3><p>Le backtest rejoue la proposition mensuelle sur les années passées, avec tes classes d\'actifs, ton profil et tes limites. Enregistre d\'abord tes règles.</p><button type="button" class="btn primary" data-pf="al-prefs">Définir mes règles</button></div>';
-  var head='<div class="ms-head"><div><h3>Backtest de tes règles</h3><p>Profil '+esc(((CK.prefs&&CK.prefs.summary(p))||{}).profile||"")+' · comparé à l\'allocation fixe du profil et à l\'achat-conservation.</p></div></div>'+formHTML(f,{minYear:st.minYear});
+  var head='<div class="ms-head"><div><h3>Backtest de tes règles</h3><p>Profil '+esc(((CK.prefs&&CK.prefs.summary(p))||{}).profile||"")+' (calculé par l\'algorithme) · comparé au modèle de référence du profil (poids fixes) et à l\'achat-conservation.</p></div></div>'+formHTML(f,{minYear:st.minYear});
   if(st.busy)return head+'<div class="bt-prog"><div><i style="width:'+Math.round((st.progress||0)*100)+'%"></i></div><span>'+esc(st.stage||"Calcul")+' · '+Math.round((st.progress||0)*100)+' %</span><button type="button" class="btn sm" data-bt="cancel">Annuler</button></div>'+warnHTML();
   if(st.err)return head+'<div class="pf-banner warn">'+esc(st.err)+'</div>'+warnHTML();
   if(!st.R)return head+'<p class="mk-note">Choisis tes réglages puis lance le backtest. Le premier calcul lit les historiques (quelques secondes).</p>'+warnHTML()+'<p class="mk-disc">'+esc(disclaimer())+'</p>';
   var R=st.R,s=R.books.strategie,m=s.metrics,fx=R.books.fixe&&R.books.fixe.metrics,h=!!st.hide;
   var kp='<div class="pf-kpis">'+tile("Valeur finale",money(s.value,h),"pf-big",esc(frDate(R.from))+" → "+esc(frDate(R.to))+" · "+esc(R.decisions)+" décisions")+
-    tile("Rendement annualisé",pc(m.cagr,2),m.cagr>0?"up":"down",fx?"allocation fixe : "+pc(fx.cagr,2):"")+tile("Volatilité",pa(m.vol),"",fx?"allocation fixe : "+pa(fx.vol):"")+
-    tile("Perte maximale",pc(m.mdd),"down",fx?"allocation fixe : "+pc(fx.mdd):"")+tile("Sharpe",fin(m.sharpe)?nf(m.sharpe,2):"—","",fin(m.sharpeLo)?"95 % : "+nf(m.sharpeLo,2)+" à "+nf(m.sharpeHi,2):"")+'</div>';
+    tile("Rendement annualisé",pc(m.cagr,2),m.cagr>0?"up":"down",fx?"modèle de référence : "+pc(fx.cagr,2):"")+tile("Volatilité",pa(m.vol),"",fx?"modèle de référence : "+pa(fx.vol):"")+
+    tile("Perte maximale",pc(m.mdd),"down",fx?"modèle de référence : "+pc(fx.mdd):"")+tile("Sharpe",fin(m.sharpe)?nf(m.sharpe,2):"—","",fin(m.sharpeLo)?"95 % : "+nf(m.sharpeLo,2)+" à "+nf(m.sharpeHi,2):"")+'</div>';
   var flags=(R.flags||[]).length?'<ul class="pf-checks al-flags">'+R.flags.map(function(x){return '<li><i class="'+(x.level==="attention"?"warn":"")+'" aria-hidden="true">'+(x.level==="attention"?"!":"i")+'</i><span>'+esc(x.msg)+'</span></li>';}).join("")+'</ul>':'';
   return head+kp+flags+'<section class="al-card"><h4>Évolution (base 100 au départ)</h4>'+chartHTML(R)+'</section>'+
     '<section class="al-card"><h4>Mesures</h4>'+metricsHTML(R,st)+'</section>'+
