@@ -1,7 +1,7 @@
 /* ================================================================
    COCKPIT — Espace « Portefeuille » (phase 4) : CK.pf
    Synthèse (valeur, plus-value prix / change, jour, espèces, comptes), onglets Positions ·
-   Opérations · Répartition · Allocation (allocui.js, proposition du mois) · Risques · Comptes, fenêtres de saisie, import CSV / sauvegarde.
+   Opérations · Répartition · Allocation (allocui.js, proposition du mois) · Backtest (btui.js) · Risques · Comptes, fenêtres de saisie, import CSV / sauvegarde.
    Le portefeuille reste dans ce navigateur (CK.pfc) : jamais envoyé sur internet.
    Rien n'est chargé avant la première ouverture de l'espace : cotations seulement des lignes
    détenues (un abonnement CK.mkt, arrêté à la sortie), historiques seulement dans l'onglet Risques.
@@ -37,7 +37,7 @@ function accType(t){var l=(M().ACCOUNT_TYPES||[]).filter(function(x){return x.id
 var ACC_SHORT={PEA:"PEA",PEA_PME:"PEA-PME",CTO:"CTO",assurance_vie:"AV",crypto_wallet:"Crypto",bank_account:"Banque",other:"Autre"};
 
 /* ---------- Onglets ---------- */
-var TABS=[{id:"positions",label:"Positions"},{id:"operations",label:"Opérations"},{id:"repartition",label:"Répartition"},{id:"allocation",label:"Allocation"},{id:"risques",label:"Risques"},{id:"comptes",label:"Comptes"}];
+var TABS=[{id:"positions",label:"Positions"},{id:"operations",label:"Opérations"},{id:"repartition",label:"Répartition"},{id:"allocation",label:"Allocation"},{id:"backtest",label:"Backtest"},{id:"risques",label:"Risques"},{id:"comptes",label:"Comptes"}];
 var TAB_IDS=TABS.map(function(t){return t.id;});
 var PEAF=[{id:"tous",label:"Tous"},{id:"eligibles",label:"Éligibles PEA"},{id:"verifier",label:"+ à vérifier"}];
 var PEA_UI={eligible:["ok","PEA"],eligible_regle:["rule","PEA (règle)"],not_eligible:["no","Non PEA"],unknown:["unk","À vérifier"]};
@@ -406,6 +406,7 @@ function build(){
     '<span class="pf-flt" id="pfFlt"></span></div><div id="pfChecks"></div><div id="pfTab"></div><p class="mk-disc">'+esc(disclaimer())+'</p>';
   [host,$("pfResume"),$("pfmBody")].forEach(function(el){if(!el)return;el.addEventListener("click",onClick);el.addEventListener("keydown",function(e){
     if(e.key!=="Enter"||!e.target.closest)return;var r=e.target.closest("tr[data-pf]");if(r){e.preventDefault();act(r.getAttribute("data-pf"),r.getAttribute("data-id"),r);}});});
+  if(CK.btui)CK.btui.wire(host,schedule);
   var mb=$("pfmBody");if(mb){mb.addEventListener("submit",onSubmit);mb.addEventListener("input",onInput);mb.addEventListener("change",onChange);}
 }
 function onClick(e){var t=e.target;if(!t||!t.closest)return;var b=t.closest("[data-pf]");if(!b||b.tagName==="FORM")return;
@@ -555,9 +556,10 @@ function paint(){
   var pf=peaF(),fa=accF?S.accounts.filter(function(a){return a.id===accF;})[0]:null;
   set("pfFlt",(fa?'<button type="button" class="chip" data-pf="accall" title="Afficher tous les comptes">'+esc(fa.name)+' ×</button>':'')+
     (tab==="positions"?'<span class="seg" role="group" aria-label="Filtre PEA">'+PEAF.map(function(p){return '<button type="button" data-pf="peaf" data-id="'+p.id+'" aria-pressed="'+(p.id===pf?"true":"false")+'">'+esc(p.label)+'</button>';}).join("")+'</span>':''));
-  set("pfChecks",S.accounts.length&&tab!=="comptes"&&tab!=="allocation"?checksHTML(ck.filter(function(c){return c.level!=="info"&&(!accF||!c.account_id||c.account_id===accF);}),4):"");
+  set("pfChecks",S.accounts.length&&tab!=="comptes"&&tab!=="allocation"&&tab!=="backtest"?checksHTML(ck.filter(function(c){return c.level!=="info"&&(!accF||!c.account_id||c.account_id===accF);}),4):"");
   var body="";
   if(tab==="allocation"&&CK.alui){CK.alui.ensure(S,v,schedule);body=CK.alui.html(S,v,{hide:h});}
+  else if(tab==="backtest"&&CK.btui)body=CK.btui.html(S,v,{hide:h});
   else if(!S.accounts.length)body='<p class="mk-note">Crée un compte, importe un fichier ou charge l\'exemple depuis le bloc du dessus.</p>';
   else if(tab==="positions")body=positionsHTML(v,{hide:h,acc:accF,peaf:pf});
   else if(tab==="operations")body=opsHTML(S,{hide:h,acc:accF,errors:v.errors});
@@ -612,6 +614,6 @@ CK.pf={
     donutSVG:donutSVG,accForm:accForm,posForm:posForm,txForm:txForm,importPreviewHTML:importPreviewHTML,jsonPreviewHTML:jsonPreviewHTML,positionsCSV:positionsCSV,
     suggest:suggest,sugHTML:sugHTML,peaPass:peaPass,backupHTML:backupHTML,money:money,heldIds:heldIds,
     setQ:function(m){Q=dict();Object.keys(m||{}).forEach(function(k){Q[k]=m[k];});},setRes:function(r){RES=r||dict();},
-    reset:function(){stop();if(CK.alui&&CK.alui.reset)CK.alui.reset();P=null;Q=dict();RES=dict();tab="positions";accF=null;built=false;fxAsked=false;robotTs=0;seen=false;RISK={key:"",res:null,busy:false,ts:0};IMP=null;}}
+    reset:function(){stop();if(CK.alui&&CK.alui.reset)CK.alui.reset();if(CK.btui&&CK.btui.reset)CK.btui.reset();P=null;Q=dict();RES=dict();tab="positions";accF=null;built=false;fxAsked=false;robotTs=0;seen=false;RISK={key:"",res:null,busy:false,ts:0};IMP=null;}}
 };
 })();

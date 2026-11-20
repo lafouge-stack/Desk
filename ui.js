@@ -154,7 +154,8 @@ function cmds(){return [
   {t:"Ajouter une position",k:"portefeuille",run:function(){CK.pf.add();}},{t:"Importer un fichier de courtier (CSV)",k:"portefeuille",run:function(){CK.pf.importer();}},
   {t:"Proposition du mois selon tes règles (Allocation)",k:"portefeuille",run:function(){CK.pf.open("allocation");}},
   {t:"Mes règles d'investissement (préférences)",k:"portefeuille",run:function(){if(CK.prefs)CK.prefs.open();}},
-  {t:"Screener mensuel multi-actifs",k:"screener",run:function(){if(CK.msui)CK.msui.open();}}]):[]).concat([
+  {t:"Screener mensuel multi-actifs",k:"screener",run:function(){if(CK.msui)CK.msui.open();}},
+  {t:"Backtest de tes règles",k:"portefeuille",run:function(){CK.pf.open("backtest");}}]):[]).concat([
   {t:(CK.cfg().beginner?"Désactiver":"Activer")+" le mode débutant",k:"aide",run:function(){var C=CK.merge(CK.cfg(),{beginner:!CK.cfg().beginner});CK.setCfg(C,true);CK.applyIdentity();}}
 ]);}
 function renderPal(){var q=$("palIn").value.trim(),ql=q.toLowerCase();palItems=cmds().filter(function(c){return !ql||(c.t+" "+c.k).toLowerCase().indexOf(ql)>=0;});

@@ -246,6 +246,19 @@ export function curveAt(series, mats) {
   const dates = [d0, back(1, "m"), back(1, "y")];
   return { mats, dates, vals: dates.map((d) => mats.map((m) => { const v = at(series[m], d); return v == null ? null : IND.round(v, 5); })) };
 }
+/**
+ * Taux sans risque mensuel (en %, moyenne du mois) pour le backtest : €STR (moyenne des fixings quotidiens du mois) depuis
+ * octobre 2019, et avant, EONIA mensuel − 8,5 pb (écart officiel fixé par la BCE entre les deux taux). Un mois n'est publié
+ * qu'une fois terminé. eonia : [["AAAA-MM", %]] ; estr : [["AAAA-MM-JJ", %]].
+ */
+export function rfMonthly(eonia, estr, now) {
+  const cur = ymdUTC(now).slice(0, 7), by = {}, out = {};
+  for (const [d, v] of estr || []) { const m = String(d).slice(0, 7); (by[m] = by[m] || []).push(v); }
+  for (const [m, v] of eonia || []) { const k = String(m).slice(0, 7); if (k < "2019-10" && isFinite(v)) out[k] = Math.round((v - 0.085) * 1e4) / 1e4; }
+  for (const m in by) if (m >= "2019-10") out[m] = Math.round(by[m].reduce((a, b) => a + b, 0) / by[m].length * 1e4) / 1e4;
+  const d = Object.keys(out).filter((m) => m < cur).sort();
+  return d.length ? { d, v: d.map((m) => out[m]), src: "BCE (EONIA − 8,5 pb avant 10/2019, puis €STR)" } : null;
+}
 async function taux(get, now, prev) {
   const out = { ...(prev || {}), ts: now }, errs = [];
   const from3y = ymdUTC(now - 3 * 365 * DAY), from14m = ymdUTC(now - 430 * DAY);
@@ -254,6 +267,11 @@ async function taux(get, now, prev) {
     const pts = Object.values(d)[0] || [];
     if (pts.length) out.estr = { d: pts[pts.length - 1][0], v: pts[pts.length - 1][1], serie: { d: pts.map((p) => p[0]), v: pts.map((p) => p[1]) }, src: "BCE" };
   } catch (e) { errs.push("€STR : " + e.message); }
+  try {
+    const eo = Object.values(ecbCsv(await get(`https://data-api.ecb.europa.eu/service/data/FM/M.U2.EUR.4F.MM.EONIA.HSTA?format=csvdata&startPeriod=2005-01`)))[0] || [];
+    const es = Object.values(ecbCsv(await get(`https://data-api.ecb.europa.eu/service/data/EST/B.EU000A2X2A25.WT?format=csvdata&startPeriod=2019-10-01`)))[0] || [];
+    const rf = rfMonthly(eo, es, now); if (rf) out.rf = rf;
+  } catch (e) { errs.push("taux sans risque mensuel : " + e.message); }
   try {
     const d = ecbCsv(await get(`https://data-api.ecb.europa.eu/service/data/FM/D.U2.EUR.4F.KR.DFR.LEV?format=csvdata&lastNObservations=1`));
     const pts = Object.values(d)[0] || []; if (pts.length) out.depo = { d: pts[pts.length - 1][0], v: pts[pts.length - 1][1], src: "BCE" };

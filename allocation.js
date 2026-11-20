@@ -118,11 +118,18 @@ function prank(x,xs){var lo=0,eq=0;xs.forEach(function(v){if(v<x)lo++;else if(v=
  * sur 5 ans (valeurs recalculées à chaque date, sans rien voir après elle), puis pondérée (score_rotation d'allocation.json).
  * Cocher une autre classe ne change jamais le score d'une classe. Moins de 12 fins de mois mesurables → score absent.
  */
+var UID=0;
+function hidden(o,k,v){try{Object.defineProperty(o,k,{value:v,enumerable:false,configurable:true,writable:true});}catch(e){}return v;}
+/** Composantes du score à la date Tk, mémorisées sur la série (elles ne dépendent que des clôtures ≤ Tk et de la référence). */
+function compAt(S,Tk,py,R){
+  var c=S._cc||hidden(S,"_cc",{}),rid=R===S?"s":R?(R._uid||hidden(R,"_uid",++UID)):"n",k=Tk+"|"+py+"|"+rid;
+  if(!(k in c))c[k]=components(metricsAt(S,Tk,py,R));return c[k];
+}
 function scoreAt(S,T,py,R){
   var W=cfg().score_rotation||{},keys=["momentum_ajuste","tendance","drawdown","volatilite_inverse","diversification"],hist=dict();
   keys.forEach(function(k){hist[k]=[];});
-  var now=components(metricsAt(S,T,py,R));if(!now)return null;
-  for(var k=1;k<=60;k++){var Tk=monthEnd(T,k);if(!S.t.length||Tk<S.t[0])break;var ck=components(metricsAt(S,Tk,py,R));if(!ck)continue;
+  var now=compAt(S,T,py,R);if(!now)return null;
+  for(var k=1;k<=60;k++){var Tk=monthEnd(T,k);if(!S.t.length||Tk<S.t[0])break;var ck=compAt(S,Tk,py,R);if(!ck)continue;
     keys.forEach(function(q){if(ck[q]!=null)hist[q].push(ck[q]);});}
   var tot=0,wsum=0,parts=dict(),n=0;
   keys.forEach(function(q){var w=nz(W[q],0);if(now[q]==null||hist[q].length<12||!(w>0))return;var p=prank(now[q],hist[q].concat([now[q]]));parts[q]=p;tot+=w*p;wsum+=w;n=Math.max(n,hist[q].length);});
@@ -269,6 +276,8 @@ function run(input){
   var ctx={prefs:EP,T:T,resume:input.resume||null,held:held,accounts:cur.accounts||[],pocheOf:pocheOf,pea_mode:P.pea_mode,vols:input.vols||{}};
   var cands=dict();poches().forEach(function(p){cands[p.id]=CK.sel.candidates(p.id,ctx);});
   var UN=universe(EP,cands),U=UN.U;
+  if(Array.isArray(input.restrict)){var keep=U.filter(function(p){return input.restrict.indexOf(p)>=0;});
+    U.filter(function(p){return keep.indexOf(p)<0;}).forEach(function(p){UN.excluded.push({id:p,label:label(p),why:"Pas encore de données à cette date."});});U=UN.U=keep;}
   log.push("Univers : "+(U.length?U.map(label).join(", "):"aucune poche")+".");
   if(!U.length)return {ok:false,why:"Aucune classe proposable avec tes règles : coche au moins une classe et un type de produit.",excluded:UN.excluded};
   // 2. profil × horizon
@@ -285,7 +294,7 @@ function run(input){
     mm.reg.stable=mm.reg.id!=="inconnu"&&REGp.every(function(x){return x===mm.reg.id;});mm.cov=dict();memo[mk]=mm;}
   var met=memo[mk].met,sco=memo[mk].sco,REG=memo[mk].reg;
   // 3. inclinaison par le score
-  var tilt=nz(prof.inclinaison_max,0.25),w3=dict();
+  var tilt=input.overrides&&fin(input.overrides.tilt)?input.overrides.tilt:nz(prof.inclinaison_max,0.25),w3=dict();
   U.forEach(function(p){var s=sco[p]&&sco[p].score,t=p==="liquidites"||s==null?0:Math.max(-0.5,Math.min(0.5,tilt*(s-50)/50));w3[p]=w[p]*(1+t);});
   w3=project(w3,U,[],{},flags);steps.tilted=Object.assign(dict(),w3);
   // 4. régime : part du risque déplacée vers les refuges cochés
@@ -325,10 +334,11 @@ function run(input){
   var tw=dict(),forced=dict(),frozen=dict();allP.forEach(function(p){tw[p]=U.indexOf(p)>=0?w6[p]:B>0&&locked[p]>0?locked[p]/B:0;forced[p]=U.indexOf(p)<0&&w0[p]>tw[p]+1e-9;});
   // une poche au-dessus de son plafond doit redescendre : réduction forcée
   groups.forEach(function(g){var s=sumv(w0,g.ids);if(s>g.cap+1e-9)g.ids.forEach(function(p){forced[p]=true;});});
-  if(hasPf){
+  if(hasPf||input.backtest){
     allP.forEach(function(p){if(forced[p]||U.indexOf(p)<0)return;var d=tw[p]-w0[p];if(Math.abs(d)<band&&!(floors[p]>w0[p]+1e-9)){tw[p]=w0[p];frozen[p]=1;}});
     settle(tw,w0,U,frozen,forced,floors);
-    var sells=function(only){return allP.reduce(function(s,p){if(only==="f"&&!forced[p])return s;if(only==="l"&&forced[p])return s;return s+Math.max(0,w0[p]-tw[p]);},0);};
+    // dépenser ses espèces n'est pas une vente : la baisse des liquidités ne compte pas dans la rotation
+    var sells=function(only){return allP.reduce(function(s,p){if(p==="liquidites")return s;if(only==="f"&&!forced[p])return s;if(only==="l"&&forced[p])return s;return s+Math.max(0,w0[p]-tw[p]);},0);};
     var sF=sells("f"),sL=sells("l");
     if(sF+sL>Tmax+1e-9){
       if(sF>Tmax)flags.push({level:"attention",msg:"Les ventes obligatoires (classes décochées, plafonds dépassés) représentent "+pct1(sF)+" du portefeuille, au-delà de ta rotation maximale ("+pct1(Tmax)+")."});
@@ -339,6 +349,9 @@ function run(input){
       log.push("Rotation limitée à "+pct1(Tmax)+" du portefeuille (ventes) : mouvements réduits à "+Math.round(lam*100)+" %.");}
   }
   steps.final=Object.assign(dict(),tw);
+  if(input.lite){var scores=dict();U.forEach(function(p){scores[p]=sco[p]?sco[p].score:null;});
+    return {ok:true,lite:true,asOf:D.date,T:T,month:D.month,regime:REG,universe:U,excluded:UN.excluded,steps:steps,final:tw,scores:scores,alpha:alpha,flags:flags,log:log,
+      sigma:sigma(tw,cov),frozen:Object.keys(frozen)};}
   // 10. instruments puis enveloppes
   var picks=dict(),pflags=[],placed=null;
   var Bp=B>0?B:10000;   // sans portefeuille ni versement : choix des instruments sur une base fictive (seuls les poids s'affichent)
@@ -473,7 +486,7 @@ function current(P,V,Cc){
   return out;
 }
 
-CK.alloc={weeklyTail:weeklyTail,weeklyMap:weeklyMap,poches:poches,poche:poche,label:label,pocheOf:pocheOf,decision:decision,eurSeries:eurSeries,cut:cut,metricsAt:metricsAt,scoreAt:scoreAt,
+CK.alloc={monthEnd:monthEnd,compAt:compAt,weeklyTail:weeklyTail,weeklyMap:weeklyMap,poches:poches,poche:poche,label:label,pocheOf:pocheOf,decision:decision,eurSeries:eurSeries,cut:cut,metricsAt:metricsAt,scoreAt:scoreAt,
   regimeAt:regimeAt,REGIMES:REGIMES,covariance:covariance,sigma:sigma,project:project,universe:universe,strategic:strategic,run:run,current:current,
   confidence:confidence,weekKey:weekKey,SAFE:SAFE,ACTIONS:["RENFORCER","RÉDUIRE","BASCULER VERS UN AUTRE ACTIF","PASSER EN LIQUIDITÉS","CONSERVER","NE RIEN FAIRE"]};
 })();
