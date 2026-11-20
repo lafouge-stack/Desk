@@ -67,6 +67,7 @@ Un petit robot GitHub (`robot.mjs`) publie toutes les 10 minutes ce que le navig
 | `.github/workflows/donnees.yml` | Lance `histo.mjs` 4 fois par jour en semaine (et le samedi) et publie le résultat dans la branche **`donnees`** (un seul commit, remplacé à chaque passage). `desk.yml` copie ensuite cette branche dans `site/data/` toutes les 10 minutes. Séparé du robot : une erreur ici ne bloque jamais les news. |
 | `desk-news-worker.js` | **Le relais Cloudflare** (code de l'agent et des news Telegram). Il ne tourne pas dans le navigateur : il se déploie sur Cloudflare Workers (voir plus bas). Aucune clé dedans : elles sont des secrets Cloudflare. |
 | `niveaux-captain.pine` | L'indicateur TradingView « Niveaux Captain » (Pine v5), copié par le bouton « Indicateur TradingView » du Desk. |
+| `DOC-MULTI-ACTIFS.md` | **Documentation technique du multi-actifs** : architecture, phases, modèles, sources, moteur d'allocation, PEA, formules du screener, fichiers publiés par le robot, espaces, tests, conditions d'utilisation des sources et **liste de ce qui n'est pas couvert**. À tenir à jour avec le code. |
 | `agent-manuel.md` | Ancien manuel de l'agent, **plus utilisé** (l'agent actuel a sa méthode dans le relais). Ne pas le modifier. |
 | `sound.js` | Ambiances sonores et sons d'interface. |
 | `bg.js` | Fond animé. |
@@ -106,7 +107,7 @@ La liste des espaces du Studio est lue dans `VIEWS0` (`CK.layout.catalog()`) : u
 
 ## Évolution multi-actifs (en cours)
 
-Le Desk évolue vers une plateforme multi-actifs pour un investisseur français : actions, ETF, indices, obligations, matières premières, crypto, portefeuille, éligibilité PEA, allocation mensuelle, screener mensuel, backtest. Le plan a été validé le 12/11/2026. Il avance **phase par phase**, avec un arrêt pour validation à la fin de chacune :
+Le Desk évolue vers une plateforme multi-actifs pour un investisseur français (documentation technique complète : `DOC-MULTI-ACTIFS.md`) : actions, ETF, indices, obligations, matières premières, crypto, portefeuille, éligibilité PEA, allocation mensuelle, screener mensuel, backtest. Le plan a été validé le 12/11/2026. Il avance **phase par phase**, avec un arrêt pour validation à la fin de chacune :
 
 | Phase | Contenu | État |
 |---|---|---|
@@ -117,8 +118,8 @@ Le Desk évolue vers une plateforme multi-actifs pour un investisseur français 
 | 4 | Espace « Portefeuille » (touche 9) : `pfcore.js` + `portfolio.js`, comptes, positions, opérations, import CSV et sauvegarde, valorisation en euros (prix / change), répartition, contrôles d'enveloppe, risques | fait |
 | 5 | Préférences « Mes règles » (`prefs.js`) + moteur d'allocation (`allocation.js`) + sélection et placement par compte (`selection.js`) + onglet Allocation (`allocui.js`) : proposition du mois, décisions expliquées, mouvements indicatifs, alternatives PEA, journal | fait |
 | 6 | Screener mensuel (`mscreen.js` + `msui.js`, bloc `msmain` de l'espace Screener, bascule avec le screener crypto) : scores 0-100, étiquettes, explications, détail des composantes, alternatives | fait |
-| 7 | Backtest (`backtest.js` + `btui.js`, onglet Backtest du Portefeuille) : tes règles vs allocation fixe vs achat-conservation, coûts, fiscalité optionnelle, mesures, grille de sensibilité, journal ; taux sans risque mensuel `rf` publié par le robot | fait (à valider) |
-| 8 | Finitions | à faire |
+| 7 | Backtest (`backtest.js` + `btui.js`, onglet Backtest du Portefeuille) : tes règles vs allocation fixe vs achat-conservation, coûts, fiscalité optionnelle, mesures, grille de sensibilité, journal ; taux sans risque mensuel `rf` publié par le robot | fait |
+| 8 | Finitions : connexions crypto plus solides (`socket()` de `core.js` : nouvel essai si l'ouverture échoue, reconnexion au retour du réseau, testé dans `sockets.test.mjs`), proposition du mois sur l'accueil, documentation finale `DOC-MULTI-ACTIFS.md` | fait (à valider) |
 
 Décisions qui s'appliquent à tout le chantier :
 - **Toujours sans serveur.** Les « endpoints » sont des fichiers JSON publiés par le robot. Le portefeuille reste uniquement dans le navigateur (jamais dans le dépôt ni sur un serveur).
@@ -146,6 +147,7 @@ Décisions qui s'appliquent à tout le chantier :
 - *Proposition du mois* : rien n'est calculé tant que « Mes règles » ne sont pas enregistrées. Les préférences et le journal restent dans le navigateur (clés `…:prefs` et `…:alloc:hist`). Le moteur ne passe jamais d'ordre et n'utilise jamais le scanner TradingView (seulement des historiques datés jusqu'à la date de décision). Tests : `allocation.test.mjs` (500 combinaisons de cases, point-in-time, enveloppes) et `allocui.test.mjs`.
 - *Screener mensuel* : pondérations dans `allocation.json` → `MSCREEN_WEIGHTS`, seuils des étiquettes dans `screener_seuils` (jamais dans l'interface). Les cours du robot ne comptent pas les dividendes : utiliser `CK.ind.totalReturn` (ou `CK.ms.prep`) pour un rendement total. Le CHOP vient de `CK.screener._t.chop`, qu'il ne faut pas modifier (test golden). Sans règles enregistrées : scores seulement, aucune étiquette. Tests : `mscreen.test.mjs`.
 - *Backtest* : taux sans risque mensuel dans `taux.json` → `rf` (`rfMonthly` de `histo.mjs` : EONIA − 8,5 pb avant 10/2019, puis €STR). Aucune optimisation : ne pas ajouter de recherche du « meilleur réglage » ; la grille montre la dispersion. Toute évolution du moteur d'allocation doit garder `backtest.test.mjs` vert (aucun regard vers l'avenir, exécution le jour ouvré suivant). Utiliser ses liquidités n'est pas une vente : la rotation ne compte que les ventes d'actifs.
+- *Connexions crypto en direct* : `socket()` dans `core.js`. Ne jamais y ajouter de chien de garde sur l'absence de messages (Binance peut rester muet) ni de pause quand l'onglet est caché ; `sockets.test.mjs` doit rester vert.
 - *Taux de change daté* : pour un calcul point-in-time, utiliser `CK.fx.rate(devise, date)` (jamais de taux postérieur), pas `CK.pfc.fxRate` qui retombe sur le dernier taux connu.
 - *Portefeuille* : il reste dans le navigateur (`localStorage`, clé `…:pf`). Pour le changer d'appareil : bouton « Sauvegarder » (fichier JSON), puis « Importer » sur l'autre appareil. Ne jamais l'écrire dans le dépôt.
 - Les tests qui chargent plusieurs fichiers dans `vmkit.mjs` : les tableaux créés « dans » le contexte ont un autre prototype ; écrire `assert.deepEqual([...x], …)`.

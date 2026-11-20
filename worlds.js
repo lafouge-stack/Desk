@@ -148,12 +148,14 @@ ART.marches=function(d,tips){
 ART.portefeuille=function(d,tips){
   var p=d.pf||{has:false};
   if(!p.has)return '<circle cx="200" cy="130" r="74" style="fill:none;stroke:var(--line-2);stroke-width:18;stroke-dasharray:6 8"/><text class="lb" x="200" y="126" style="text-anchor:middle">Aucun compte</text><text class="lb sm" x="200" y="146" style="text-anchor:middle">Entre pour créer ou importer</text>';
-  var G=(p.groups||[]).filter(function(g){return g.v>0;}),tot=G.reduce(function(s,g){return s+g.v;},0),R=78,C=2*Math.PI*R,off=0,s="",gap=G.length>1?2:0;
+  // dessin resserré (phase 8) : la légende tient dans le cadre même quand l'illustration est rognée à droite
+  var SHORT={actions:"Actions",obligations:"Obligations",mp:"Mat. prem.",immo:"Immobilier",crypto:"Crypto",liq:"Liquidités",autre:"Autres"};
+  var G=(p.groups||[]).filter(function(g){return g.v>0;}),tot=G.reduce(function(s,g){return s+g.v;},0),R=68,C=2*Math.PI*R,off=0,s="",gap=G.length>1?2:0;
   G.forEach(function(g){var len=g.v/tot*C,dl=Math.max(0.01,len-gap);
-    s+='<circle class="pf-seg pf-c-'+esc(g.k)+'" cx="120" cy="130" r="'+R+'" style="stroke-width:22" stroke-dasharray="'+f1(dl)+' '+f1(C-dl)+'" stroke-dashoffset="'+f1(-off)+'" transform="rotate(-90 120 130)"/>';off+=len;});
-  s+='<text class="lb" x="120" y="128" style="text-anchor:middle;font-size:17px">'+esc(p.hide?"••• €":u.nf(p.total,0)+" €")+'</text><text class="lb sm" x="120" y="148" style="text-anchor:middle">'+esc(p.n+" ligne"+(p.n>1?"s":""))+'</text>';
+    s+='<circle class="pf-seg pf-c-'+esc(g.k)+'" cx="90" cy="130" r="'+R+'" style="stroke-width:20" stroke-dasharray="'+f1(dl)+' '+f1(C-dl)+'" stroke-dashoffset="'+f1(-off)+'" transform="rotate(-90 90 130)"/>';off+=len;});
+  s+='<text class="lb" x="90" y="128" style="text-anchor:middle;font-size:15px">'+esc(p.hide?"••• €":u.nf(p.total,0)+" €")+'</text><text class="lb sm" x="90" y="147" style="text-anchor:middle">'+esc(p.n+" ligne"+(p.n>1?"s":""))+'</text>';
   G.slice(0,7).forEach(function(g,k){var y=48+k*28,tt=tips?T(tipHead(g.label,"","var(--pfc)")+tipRow("Part",esc(u.nf(g.w*100,1)+" %"))+(p.hide?"":tipRow("Montant",esc(u.nf(g.v,0)+" €")))+'<span class="ta">Clic : ouvrir le Portefeuille</span>',"pf:repartition"):"";
-    s+='<g class="hv pf-c-'+esc(g.k)+'"'+tt+'>'+(tips?'<rect class="hit" x="226" y="'+(y-14)+'" width="168" height="26"/>':'')+'<rect class="pf-wsw" x="230" y="'+(y-7)+'" width="12" height="12" rx="3"/><text class="lb sm al" x="250" y="'+(y+4)+'">'+esc(g.label)+'</text><text class="lb sm ar" x="392" y="'+(y+4)+'">'+esc(u.nf(g.w*100,0)+" %")+'</text></g>';});
+    s+='<g class="hv pf-c-'+esc(g.k)+'"'+tt+'>'+(tips?'<rect class="hit" x="174" y="'+(y-14)+'" width="140" height="26"/>':'')+'<rect class="pf-wsw" x="178" y="'+(y-7)+'" width="12" height="12" rx="3"/><text class="lb sm ar" x="228" y="'+(y+4)+'">'+esc(u.nf(g.w*100,0)+" %")+'</text><text class="lb sm al" x="236" y="'+(y+4)+'">'+esc(SHORT[g.k]||g.label)+'</text></g>';});
   return s;};
 function art(i,d,tips){return '<svg class="w-art" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'+ART[W[i].v](d,tips)+'</svg>';}
 
@@ -185,7 +187,8 @@ function insights(i,d){
     case "net":var L2=(CK.netSummary?CK.netSummary().list:[]).filter(function(x){return x.st.k==="down"||x.st.k==="warn";}).slice(0,3);
       return L2.length?L2.map(function(x){return [x.st.k==="down"?"✕":"!","<b>"+esc(x.s.name)+"</b> · "+esc(x.st.l),x.st.k==="down"?"down":"warn"];}):[["✓","Toutes les sources répondent","up"]];
     case "portefeuille":var pf2=d.pf||{};if(!pf2.has)return [["+","Crée un compte ou importe le fichier de ton courtier",""],["🔒","Ton portefeuille reste dans ce navigateur",""]];
-      return (pf2.alerts?[["!","<b>"+pf2.alerts+" alerte"+(pf2.alerts>1?"s":"")+"</b> sur tes enveloppes (PEA, plafonds)","down"]]:[]).concat(pf2.top.slice(0,pf2.alerts?2:3).map(function(x){return ["●","<b>"+esc(x.s)+"</b> · "+u.nf((x.w||0)*100,1)+" % du total"+(x.pnl_pct!=null?" · <span class=\""+(x.pnl_pct>=0?"up":"down")+"\">"+(x.pnl_pct>=0?"+":"−")+u.nf(Math.abs(x.pnl_pct*100),1)+" %</span>":""),""];}));
+      return (pf2.alerts?[["!","<b>"+pf2.alerts+" alerte"+(pf2.alerts>1?"s":"")+"</b> sur tes enveloppes (PEA, plafonds)","down"]]:[])
+        .concat(pf2.prop?[["◆","<b>Proposition de "+esc(pf2.prop.label)+"</b> · "+(pf2.prop.moves?pf2.prop.moves+" mouvement"+(pf2.prop.moves>1?"s":"")+" selon tes règles":"rien à changer selon tes règles"),""]]:[]).concat(pf2.top.slice(0,pf2.alerts?2:3).map(function(x){return ["●","<b>"+esc(x.s)+"</b> · "+u.nf((x.w||0)*100,1)+" % du total"+(x.pnl_pct!=null?" · <span class=\""+(x.pnl_pct>=0?"up":"down")+"\">"+(x.pnl_pct>=0?"+":"−")+u.nf(Math.abs(x.pnl_pct*100),1)+" %</span>":""),""];}));
     case "marches":var mv=d.mk.items.filter(function(x){return x.c!=null;}).sort(function(a,b){return Math.abs(b.c)-Math.abs(a.c);}).slice(0,3);
       return mv.length?mv.map(function(x){return [x.c>=0?"▲":"▼","<b>"+esc(x.n)+"</b> · "+esc(x.px)+" · "+esc(x.txt),x.c>=0?"up":"down"];}):[["◷","Ouvre l'espace pour charger les cours",""]];
     case "news":return d.items.slice(0,3).map(function(x){return ["◆",'<b>'+(x.ts?u.ago(x.ts):"")+'</b> · '+esc((x.title||"").slice(0,80))+((x.title||"").length>80?"…":""),""];});

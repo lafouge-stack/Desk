@@ -188,19 +188,31 @@ function paintMacroStrip(){
 /* ---------------- Temps réel : OKX (prix + liquidations), Bybit, Binance ---------------- */
 var LIQ_BASES=["BTC","ETH","SOL","XRP","DOGE","SUI","BNB","ADA","LINK","AVAX"];
 var wsUp={OKX:false,Bybit:false,Binance:false};
-function setWsState(){var on=Object.keys(wsUp).filter(function(k){return wsUp[k];});$("wsState").textContent=on.length?"Temps réel · "+on.join(", "):"Connexion au temps réel…";}
+function setWsState(){var on=Object.keys(wsUp).filter(function(k){return wsUp[k];}),el=$("wsState");if(el)el.textContent=on.length?"Temps réel · "+on.join(", "):"Connexion au temps réel…";}
+/* Connexion en direct avec reconnexion. Phase 8 (durcissement minimal, testé dans sockets.test.mjs) :
+   - si le navigateur refuse d'ouvrir la connexion (hors ligne…), un nouvel essai est programmé (avant : abandon définitif) ;
+   - au retour du réseau (événement « online »), reconnexion tout de suite au lieu d'attendre jusqu'à 60 s ;
+   - jamais deux connexions ni deux minuteries de reconnexion à la fois.
+   Volontairement AUCUN chien de garde sur l'absence de messages (Binance peut rester muet en marché calme)
+   et aucune pause quand l'onglet est caché. */
 function socket(name,url,onOpen,onMsg,pingMsg){
-  var back=1500,ws,pingT;
+  var back=1500,ws=null,pingT,retryT=null;
+  function live(){return ws&&(ws.readyState===0||ws.readyState===1);}
+  function later(){if(retryT)return;retryT=setTimeout(function(){retryT=null;go();},back);back=Math.min(back*2,60000);}
   function go(){
-    try{ws=new WebSocket(url);}catch(e){return;}
+    if(live())return;
     var nr=netRec(netId(url));
-    ws.onopen=function(){nr.open=true;nr.opens++;nr.openTs=Date.now();back=1500;wsUp[name]=true;setWsState();onOpen(ws);clearInterval(pingT);if(pingMsg)pingT=setInterval(function(){try{ws.send(pingMsg);}catch(e){}},20000);};
+    try{ws=new WebSocket(url);}catch(e){ws=null;nr.open=false;nr.lastErr=Date.now();nr.msg="Ouverture impossible, nouvel essai…";later();return;}
+    var me=ws;
+    ws.onopen=function(){if(ws!==me)return;nr.open=true;nr.opens++;nr.openTs=Date.now();back=1500;wsUp[name]=true;setWsState();onOpen(ws);clearInterval(pingT);if(pingMsg)pingT=setInterval(function(){try{me.send(pingMsg);}catch(e){}},20000);};
     ws.onmessage=function(e){nr.lastMsg=Date.now();nr.msgs.push(nr.lastMsg);if(nr.msgs.length>600)nr.msgs.splice(0,300);if(e.data==="pong")return;var m;try{m=JSON.parse(e.data);}catch(x){return;}onMsg(m);};
-    ws.onclose=function(){nr.open=false;nr.closes++;nr.lastErr=Date.now();nr.msg="Connexion fermée, reconnexion…";clearInterval(pingT);wsUp[name]=false;setWsState();setTimeout(go,back);back=Math.min(back*2,60000);};
-    ws.onerror=function(){try{ws.close();}catch(e){}};
+    ws.onclose=function(){if(ws!==me)return;nr.open=false;nr.closes++;nr.lastErr=Date.now();nr.msg="Connexion fermée, reconnexion…";clearInterval(pingT);wsUp[name]=false;setWsState();later();};
+    ws.onerror=function(){try{me.close();}catch(e){}};
   }
+  if(typeof window!=="undefined"&&window.addEventListener)window.addEventListener("online",function(){if(live())return;if(retryT){clearTimeout(retryT);retryT=null;}back=1500;go();});
   go();return {send:function(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}};
 }
+CK._socket=socket;   // pour les tests (sockets.test.mjs) ; ne pas utiliser ailleurs
 var okx=null,okxSent={};
 function tickerInsts(){var s={};["BTC","ETH","SOL"].concat(watch()).forEach(function(b){s[b+"-USDT"]=1;});(CK.alertInsts?CK.alertInsts():[]).forEach(function(i){s[i]=1;});return Object.keys(s);}
 function okxSub(all){var args=[];if(all){okxSent={};args.push({channel:"liquidation-orders",instType:"SWAP"});}

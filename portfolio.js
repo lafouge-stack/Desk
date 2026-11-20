@@ -379,7 +379,12 @@ function home(){
   var top=V.lines.filter(function(L){return L.value>0;}).sort(function(a,b){return b.value-a.value;}).slice(0,3);
   return {has:true,hide:hideOn(),total:V.total.value,pnl:V.total.pnl,pnl_pct:V.total.pnl_pct,day:V.total.dayBase>0?V.total.day:null,n:V.lines.filter(function(L){return L.quantity>0;}).length,
     groups:V.breakdown.groups,accounts:V.accounts.length,top:top.map(function(L){return {s:L.i?L.i.symbol:L.instrument_id,w:L.weight,pnl_pct:L.pnl_pct};}),
-    alerts:Fc.checks(P,V).filter(function(c){return c.level==="alerte";}).length,demo:P.accounts.every(function(a){return a.demo;})};
+    alerts:Fc.checks(P,V).filter(function(c){return c.level==="alerte";}).length,demo:P.accounts.every(function(a){return a.demo;}),prop:propOfMonth()};
+}
+/** Proposition du mois déjà calculée (journal du navigateur, aucune requête) : {label, moves} ou null. */
+function propOfMonth(){
+  try{if(!CK.alui||!CK.alloc)return null;var D=CK.alloc.decision(now()),j=CK.alui.journal().filter(function(x){return D&&x.month===D.month;})[0];if(!j)return null;
+    var mv=j.decisions.filter(function(d){return d.a&&d.a!=="CONSERVER"&&d.a!=="NE RIEN FAIRE";}).length;return {label:j.monthLabel||j.month,moves:mv};}catch(e){return null;}
 }
 
 /* ================================================================
